@@ -40,7 +40,7 @@ export default function App() {
   // Image Source & Canvas Sizing States
   const [imageSrc, setImageSrc] = useState(null);
   const [aspectRatio, setAspectRatio] = useState('original');
-  const [fitMode, setFitMode] = useState('contain');
+  const [fitMode, setFitMode] = useState('smart_fit');
   const [autoTrim, setAutoTrim] = useState(false);
   const [canvasBg, setCanvasBg] = useState('#ffffff');
   const [processedCanvas, setProcessedCanvas] = useState(null);

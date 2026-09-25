@@ -7,11 +7,12 @@
  * to guarantee 100% reliable detection with zero sensor errors.
  */
 
-import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, FaceLandmarker, PoseLandmarker, HandLandmarker } from '@mediapipe/tasks-vision';
 
 let visionResolver = null;
 let faceLandmarker = null;
 let poseLandmarker = null;
+let handLandmarker = null;
 let isInitializing = false;
 let sensorHealth = {
   status: 'INITIALIZING', // 'READY_NEURAL' | 'READY_CV_FALLBACK' | 'ERROR'
@@ -31,10 +32,10 @@ export function getSensorStatus() {
  * Initializes MediaPipe Tasks Vision with robust GPU/CPU fallback and timeout
  */
 export async function initMediaPipe() {
-  if (faceLandmarker && poseLandmarker) {
+  if (faceLandmarker && poseLandmarker && handLandmarker) {
     sensorHealth.status = 'READY_NEURAL';
     sensorHealth.neuralAvailable = true;
-    sensorHealth.activeEngine = 'MediaPipe Neural Engine';
+    sensorHealth.activeEngine = 'MediaPipe Neural Engine (Face + Pose + Hand)';
     return true;
   }
   if (isInitializing) return false;
@@ -53,16 +54,18 @@ export async function initMediaPipe() {
       try {
         faceLandmarker = await createFaceLandmarker(visionResolver, 'GPU');
         poseLandmarker = await createPoseLandmarker(visionResolver, 'GPU');
+        handLandmarker = await createHandLandmarker(visionResolver, 'GPU');
       } catch (gpuErr) {
         console.warn('MediaPipe GPU initialization failed, falling back to CPU:', gpuErr);
         delegate = 'CPU';
         faceLandmarker = await createFaceLandmarker(visionResolver, 'CPU');
         poseLandmarker = await createPoseLandmarker(visionResolver, 'CPU');
+        handLandmarker = await createHandLandmarker(visionResolver, 'CPU');
       }
 
       sensorHealth.status = 'READY_NEURAL';
       sensorHealth.neuralAvailable = true;
-      sensorHealth.activeEngine = `MediaPipe (${delegate})`;
+      sensorHealth.activeEngine = `MediaPipe (${delegate}) [Face+Pose+Hand]`;
       sensorHealth.lastError = null;
       return true;
     })();
@@ -108,6 +111,17 @@ async function createPoseLandmarker(resolver, delegate) {
   });
 }
 
+async function createHandLandmarker(resolver, delegate) {
+  return await HandLandmarker.createFromOptions(resolver, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+      delegate: delegate
+    },
+    runningMode: 'IMAGE',
+    numHands: 4
+  });
+}
+
 /**
  * Scans an image element or canvas. Converts to offscreen canvas first
  * to avoid CORS/decoding bugs.
@@ -124,16 +138,18 @@ export async function scanImage(imageSource) {
   }
 
   // 2. Attempt MediaPipe Neural Detection if available
-  if (faceLandmarker && poseLandmarker) {
+  if (faceLandmarker || poseLandmarker || handLandmarker) {
     try {
-      const faceResult = faceLandmarker.detect(canvas);
-      const poseResult = poseLandmarker.detect(canvas);
+      const faceResult = faceLandmarker ? faceLandmarker.detect(canvas) : { faceLandmarks: [] };
+      const poseResult = poseLandmarker ? poseLandmarker.detect(canvas) : { landmarks: [] };
+      const handResult = handLandmarker ? handLandmarker.detect(canvas) : { landmarks: [] };
 
       const hasFaces = faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0;
       const hasPoses = poseResult.landmarks && poseResult.landmarks.length > 0;
+      const hasHands = handResult.landmarks && handResult.landmarks.length > 0;
 
-      if (hasFaces || hasPoses) {
-        const neuralData = parseMediaPipeResults(faceResult, poseResult, width, height);
+      if (hasFaces || hasPoses || hasHands) {
+        const neuralData = parseMediaPipeResults(faceResult, poseResult, handResult, width, height);
         return {
           ...neuralData,
           engine: 'MediaPipe Neural Engine',
@@ -174,14 +190,122 @@ function normalizeToCanvas(source) {
 }
 
 /**
- * Parses MediaPipe Face & Pose results into machine-vision telemetry boxes
+ * Parses MediaPipe Face, Pose & Hand results into machine-vision telemetry boxes
  */
-function parseMediaPipeResults(faceResult, poseResult, width, height) {
+function parseMediaPipeResults(faceResult, poseResult, handResult, width, height) {
   const boxes = [];
   const keypoints = [];
 
-  // Parse Faces
-  if (faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
+  // 1. Parse Hands (Individual hands, phalanges, wrists, finger tracking)
+  if (handResult && handResult.landmarks && handResult.landmarks.length > 0) {
+    handResult.landmarks.forEach((hand, idx) => {
+      let minX = 1, maxX = 0, minY = 1, maxY = 0;
+      hand.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
+      });
+
+      const padX = (maxX - minX) * 0.08;
+      const padY = (maxY - minY) * 0.08;
+      const hx = Math.max(0, (minX - padX) * width);
+      const hy = Math.max(0, (minY - padY) * height);
+      const hw = Math.min(width - hx, (maxX - minX + padX * 2) * width);
+      const hh = Math.min(height - hy, (maxY - minY + padY * 2) * height);
+
+      const handedness = handResult.handednesses && handResult.handednesses[idx] && handResult.handednesses[idx][0]
+        ? handResult.handednesses[idx][0].categoryName
+        : `HAND_0${idx + 1}`;
+
+      // Primary Hand Subject Box
+      boxes.push({
+        id: `hand_${idx}`,
+        label: 'hand_track',
+        subLabel: `${handedness}_segment`,
+        conf: '0.98',
+        x: Math.round(hx),
+        y: Math.round(hy),
+        width: Math.round(hw),
+        height: Math.round(hh),
+        type: 'subject'
+      });
+
+      // Digits Sub-Box (fingertip clusters)
+      const tipIndices = [4, 8, 12, 16, 20, 3, 7, 11, 15, 19];
+      let dMinX = 1, dMaxX = 0, dMinY = 1, dMaxY = 0;
+      tipIndices.forEach(ti => {
+        const pt = hand[ti];
+        if (pt) {
+          if (pt.x < dMinX) dMinX = pt.x;
+          if (pt.x > dMaxX) dMaxX = pt.x;
+          if (pt.y < dMinY) dMinY = pt.y;
+          if (pt.y > dMaxY) dMaxY = pt.y;
+        }
+      });
+      const dPadX = (dMaxX - dMinX) * 0.05;
+      const dPadY = (dMaxY - dMinY) * 0.05;
+      const dx = Math.max(0, (dMinX - dPadX) * width);
+      const dy = Math.max(0, (dMinY - dPadY) * height);
+      const dw = Math.min(width - dx, (dMaxX - dMinX + dPadX * 2) * width);
+      const dh = Math.min(height - dy, (dMaxY - dMinY + dPadY * 2) * height);
+
+      boxes.push({
+        id: `digits_${idx}`,
+        label: 'PART_digits',
+        subLabel: 'phalanges_cluster',
+        conf: '0.97',
+        x: Math.round(dx),
+        y: Math.round(dy),
+        width: Math.round(dw),
+        height: Math.round(dh),
+        type: 'head'
+      });
+
+      // Palm / Carpal Sub-Box (wrist & metacarpal zone)
+      const palmIndices = [0, 1, 2, 5, 9, 13, 17];
+      let pMinX = 1, pMaxX = 0, pMinY = 1, pMaxY = 0;
+      palmIndices.forEach(pi => {
+        const pt = hand[pi];
+        if (pt) {
+          if (pt.x < pMinX) pMinX = pt.x;
+          if (pt.x > pMaxX) pMaxX = pt.x;
+          if (pt.y < pMinY) pMinY = pt.y;
+          if (pt.y > pMaxY) pMaxY = pt.y;
+        }
+      });
+      const pPadX = (pMaxX - pMinX) * 0.06;
+      const pPadY = (pMaxY - pMinY) * 0.06;
+      const px = Math.max(0, (pMinX - pPadX) * width);
+      const py = Math.max(0, (pMinY - pPadY) * height);
+      const pw = Math.min(width - px, (pMaxX - pMinX + pPadX * 2) * width);
+      const ph = Math.min(height - py, (pMaxY - pMinY + pPadY * 2) * height);
+
+      // Only add palm box if sufficiently separated from digits
+      if (Math.abs(py - dy) > 20 || Math.abs(px - dx) > 20) {
+        boxes.push({
+          id: `palm_${idx}`,
+          label: 'PART_palm',
+          subLabel: 'metacarpal_cluster',
+          conf: '0.96',
+          x: Math.round(px),
+          y: Math.round(py),
+          width: Math.round(pw),
+          height: Math.round(ph),
+          type: 'torso'
+        });
+      }
+
+      // Anatomical Keypoints on Hand
+      if (hand[0]) keypoints.push({ x: Math.round(hand[0].x * width), y: Math.round(hand[0].y * height), label: `WRIST_${idx + 1}` });
+      if (hand[4]) keypoints.push({ x: Math.round(hand[4].x * width), y: Math.round(hand[4].y * height), label: 'THUMB' });
+      if (hand[8]) keypoints.push({ x: Math.round(hand[8].x * width), y: Math.round(hand[8].y * height), label: 'INDEX' });
+      if (hand[12]) keypoints.push({ x: Math.round(hand[12].x * width), y: Math.round(hand[12].y * height), label: 'MIDDLE' });
+    });
+  }
+
+  // 2. Parse Faces
+  if (faceResult && faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
     faceResult.faceLandmarks.forEach((face, idx) => {
       let minX = 1, maxX = 0, minY = 1, maxY = 0;
       face.forEach(pt => {
@@ -217,8 +341,8 @@ function parseMediaPipeResults(faceResult, poseResult, width, height) {
     });
   }
 
-  // Parse Poses (Torso, Limbs, Overall Subject)
-  if (poseResult.landmarks && poseResult.landmarks.length > 0) {
+  // 3. Parse Poses (Torso, Limbs, Overall Subject)
+  if (poseResult && poseResult.landmarks && poseResult.landmarks.length > 0) {
     poseResult.landmarks.forEach((pose, idx) => {
       let minX = 1, maxX = 0, minY = 1, maxY = 0;
       pose.forEach(pt => {
@@ -269,8 +393,6 @@ function parseMediaPipeResults(faceResult, poseResult, width, height) {
           type: 'torso'
         });
 
-        keypoints.push({ x: Math.round(ls.x * width), y: Math.round(ls.y * height) });
-        keypoints.push({ x: Math.round(rs.x * width), y: Math.round(rs.y * height) });
       }
     });
   }
@@ -377,158 +499,275 @@ function realPixelComputerVisionScan(canvas, width, height) {
   const hasForeground = totalFgPixels > (width * height * 0.01) && maxFgX > minFgX && maxFgY > minFgY;
 
   if (hasSkin) {
-    // Check if there is an actual continuous dense clothing region immediately beneath maxSkinY
-    const testZoneH = Math.min(height - maxSkinY, (maxSkinY - minSkinY));
-    let denseFgBelowSkin = 0;
-    if (testZoneH > 20) {
-      for (let y = maxSkinY; y < maxSkinY + testZoneH; y += 4) {
-        for (let x = minSkinX; x < maxSkinX; x += 4) {
-          const p = (y * width + x) * 4;
-          const r = data[p], g = data[p + 1], b = data[p + 2], a = data[p + 3];
-          const diffBg = Math.abs(r - avgBgR) + Math.abs(g - avgBgG) + Math.abs(b - avgBgB);
-          if (a > 30 && diffBg > 40) {
-            denseFgBelowSkin++;
+    // Multi-cluster detection: compute vertical skin profile
+    const rowSkinCount = new Float32Array(gridH);
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        rowSkinCount[gy] += skinDensity[gy * gridW + gx];
+      }
+    }
+
+    // Identify continuous active row intervals (e.g. upper hand vs lower hand)
+    const rawClusters = [];
+    let inCluster = false;
+    let clusterStart = 0;
+    const skinRowThreshold = Math.max(1.5, (totalSkinPixels / (gridH * 10)));
+
+    for (let gy = 0; gy < gridH; gy++) {
+      if (rowSkinCount[gy] >= skinRowThreshold) {
+        if (!inCluster) {
+          inCluster = true;
+          clusterStart = gy;
+        }
+      } else {
+        if (inCluster) {
+          inCluster = false;
+          if (gy - 1 >= clusterStart) {
+            rawClusters.push({ startGy: clusterStart, endGy: gy - 1 });
           }
         }
       }
     }
-    const sampleArea = Math.max(1, ((maxSkinX - minSkinX) / 4) * (testZoneH / 4));
-    const clothingDensity = denseFgBelowSkin / sampleArea;
-    const hasRealTorsoBelow = clothingDensity > 0.35 && (maxFgY - maxSkinY) > (height * 0.15);
-    const isIsolatedHandOrLimb = !hasRealTorsoBelow;
+    if (inCluster) {
+      rawClusters.push({ startGy: clusterStart, endGy: gridH - 1 });
+    }
 
-    if (isIsolatedHandOrLimb) {
-      // Tightly wrap the detected hand / biometric extremity
-      const padX = Math.round((maxSkinX - minSkinX) * 0.05);
-      const padY = Math.round((maxSkinY - minSkinY) * 0.05);
-      const sx = Math.max(0, minSkinX - padX);
-      const sy = Math.max(0, minSkinY - padY);
-      const sw = Math.min(width - sx, (maxSkinX - minSkinX) + padX * 2);
-      const sh = Math.min(height - sy, (maxSkinY - minSkinY) + padY * 2);
+    const clusters = rawClusters.length > 0 ? rawClusters : [{ startGy: 0, endGy: gridH - 1 }];
 
-      // Primary Subject Box: Hand Segment (Clamped strictly to hand bounds)
-      boxes.push({
-        id: 'sub_main',
-        label: 'subject_track',
-        subLabel: 'biometric_hand_segment',
-        conf: '0.98',
-        x: Math.round(sx),
-        y: Math.round(sy),
-        width: Math.round(sw),
-        height: Math.round(sh),
-        type: 'subject'
+    // If multiple clusters or isolated hand
+    if (clusters.length > 1) {
+      // Process EACH separate hand / extremity independently
+      clusters.forEach((cl, cIdx) => {
+        let cMinX = width, cMaxX = 0, cMinY = height, cMaxY = 0;
+        let cPixels = 0;
+
+        for (let gy = cl.startGy; gy <= cl.endGy; gy++) {
+          for (let gx = 0; gx < gridW; gx++) {
+            if (skinDensity[gy * gridW + gx] > 0) {
+              cMinX = Math.min(cMinX, gx * cellW);
+              cMaxX = Math.max(cMaxX, (gx + 1) * cellW);
+              cMinY = Math.min(cMinY, gy * cellH);
+              cMaxY = Math.max(cMaxY, (gy + 1) * cellH);
+              cPixels++;
+            }
+          }
+        }
+
+        if (cPixels > 3 && cMaxX > cMinX && cMaxY > cMinY) {
+          const padX = Math.round((cMaxX - cMinX) * 0.05);
+          const padY = Math.round((cMaxY - cMinY) * 0.05);
+          const sx = Math.max(0, cMinX - padX);
+          const sy = Math.max(0, cMinY - padY);
+          const sw = Math.min(width - sx, (cMaxX - cMinX) + padX * 2);
+          const sh = Math.min(height - sy, (cMaxY - cMinY) + padY * 2);
+
+          // Full Subject Box for this specific hand
+          boxes.push({
+            id: `sub_hand_${cIdx + 1}`,
+            label: 'hand_track',
+            subLabel: `hand_0${cIdx + 1}_segment`,
+            conf: '0.98',
+            x: Math.round(sx),
+            y: Math.round(sy),
+            width: Math.round(sw),
+            height: Math.round(sh),
+            type: 'subject'
+          });
+
+          // Digits Box (upper 42%)
+          const dw = Math.round(sw * 0.88);
+          const dh = Math.round(sh * 0.42);
+          const dx = Math.round(sx + (sw - dw) / 2);
+          const dy = Math.round(sy + sh * 0.04);
+
+          boxes.push({
+            id: `sub_digits_${cIdx + 1}`,
+            label: 'PART_digits',
+            subLabel: 'phalanges_cluster',
+            conf: '0.97',
+            x: dx,
+            y: dy,
+            width: dw,
+            height: dh,
+            type: 'head'
+          });
+
+          // Palm Box (lower 40%, spaced to prevent collision)
+          const pw = Math.round(sw * 0.75);
+          const ph = Math.round(sh * 0.40);
+          const px = Math.round(sx + (sw - pw) / 2);
+          const py = Math.round(sy + sh * 0.52);
+
+          boxes.push({
+            id: `sub_palm_${cIdx + 1}`,
+            label: 'PART_palm',
+            subLabel: 'metacarpal_cluster',
+            conf: '0.96',
+            x: px,
+            y: py,
+            width: pw,
+            height: ph,
+            type: 'torso'
+          });
+
+          // Tracking Keypoints for this hand
+          keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.12), label: `DIGIT_0${cIdx + 1}` });
+          keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.70), label: `PALM_0${cIdx + 1}` });
+        }
       });
-
-      // Digits / Phalanges Box (upper 42%)
-      const dw = Math.round(sw * 0.88);
-      const dh = Math.round(sh * 0.42);
-      const dx = Math.round(sx + (sw - dw) / 2);
-      const dy = Math.round(sy + sh * 0.05);
-
-      boxes.push({
-        id: 'sub_digits',
-        label: 'PART_digits',
-        subLabel: 'phalanges_cluster',
-        conf: '0.97',
-        x: dx,
-        y: dy,
-        width: dw,
-        height: dh,
-        type: 'head'
-      });
-
-      // Palm / Metacarpal Box (lower 38%, spaced to avoid badge overlap)
-      const pw = Math.round(sw * 0.72);
-      const ph = Math.round(sh * 0.38);
-      const px = Math.round(sx + (sw - pw) / 2);
-      const py = Math.round(sy + sh * 0.54);
-
-      boxes.push({
-        id: 'sub_palm',
-        label: 'PART_palm',
-        subLabel: 'metacarpal_cluster',
-        conf: '0.96',
-        x: px,
-        y: py,
-        width: pw,
-        height: ph,
-        type: 'torso'
-      });
-
-      // Real Anatomical Keypoint Crosses on Hand
-      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.12), label: 'DIGIT_03' });
-      keypoints.push({ x: Math.round(sx + sw * 0.28), y: Math.round(sy + sh * 0.18), label: 'DIGIT_02' });
-      keypoints.push({ x: Math.round(sx + sw * 0.72), y: Math.round(sy + sh * 0.22), label: 'DIGIT_04' });
-      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.68), label: 'PALM_CTR' });
-      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.90), label: 'CARPAL' });
 
     } else {
-      // Full human / torso with real clothing detected below skin
-      const effectiveMinX = hasForeground ? Math.min(minSkinX, minFgX) : minSkinX;
-      const effectiveMaxX = hasForeground ? Math.max(maxSkinX, maxFgX) : maxSkinX;
-      const effectiveMinY = minSkinY;
-      const effectiveMaxY = hasForeground ? maxFgY : maxSkinY;
+      // Single subject cluster
+      const testZoneH = Math.min(height - maxSkinY, (maxSkinY - minSkinY));
+      let denseFgBelowSkin = 0;
+      if (testZoneH > 20) {
+        for (let y = maxSkinY; y < maxSkinY + testZoneH; y += 4) {
+          for (let x = minSkinX; x < maxSkinX; x += 4) {
+            const p = (y * width + x) * 4;
+            const r = data[p], g = data[p + 1], b = data[p + 2], a = data[p + 3];
+            const diffBg = Math.abs(r - avgBgR) + Math.abs(g - avgBgG) + Math.abs(b - avgBgB);
+            if (a > 30 && diffBg > 40) {
+              denseFgBelowSkin++;
+            }
+          }
+        }
+      }
+      const sampleArea = Math.max(1, ((maxSkinX - minSkinX) / 4) * (testZoneH / 4));
+      const clothingDensity = denseFgBelowSkin / sampleArea;
+      const hasRealTorsoBelow = clothingDensity > 0.35 && (maxFgY - maxSkinY) > (height * 0.15);
+      const isIsolatedHandOrLimb = !hasRealTorsoBelow;
 
-      const padX = Math.round((effectiveMaxX - effectiveMinX) * 0.05);
-      const padY = Math.round((effectiveMaxY - effectiveMinY) * 0.05);
-      const sx = Math.max(0, effectiveMinX - padX);
-      const sy = Math.max(0, effectiveMinY - padY);
-      const sw = Math.min(width - sx, (effectiveMaxX - effectiveMinX) + padX * 2);
-      const sh = Math.min(height - sy, (effectiveMaxY - effectiveMinY) + padY * 2);
+      if (isIsolatedHandOrLimb) {
+        // Tightly wrap single hand / biometric extremity
+        const padX = Math.round((maxSkinX - minSkinX) * 0.05);
+        const padY = Math.round((maxSkinY - minSkinY) * 0.05);
+        const sx = Math.max(0, minSkinX - padX);
+        const sy = Math.max(0, minSkinY - padY);
+        const sw = Math.min(width - sx, (maxSkinX - minSkinX) + padX * 2);
+        const sh = Math.min(height - sy, (maxSkinY - minSkinY) + padY * 2);
 
-      boxes.push({
-        id: 'sub_main',
-        label: 'subject_track',
-        subLabel: 'ID:001A_person',
-        conf: '0.98',
-        x: Math.round(sx),
-        y: Math.round(sy),
-        width: Math.round(sw),
-        height: Math.round(sh),
-        type: 'subject'
-      });
-
-      // Head / Face Box (bound tightly to skin area)
-      const hw = Math.round((maxSkinX - minSkinX) * 1.05);
-      const hh = Math.round((maxSkinY - minSkinY) * 1.05);
-      const hx = Math.round(Math.max(0, minSkinX - (hw - (maxSkinX - minSkinX)) / 2));
-      const hy = Math.round(Math.max(0, minSkinY - (hh - (maxSkinY - minSkinY)) / 2));
-
-      boxes.push({
-        id: 'sub_head',
-        label: 'PART_head',
-        subLabel: 'face_profile',
-        conf: '0.98',
-        x: hx,
-        y: hy,
-        width: Math.min(width - hx, hw),
-        height: Math.min(height - hy, hh),
-        type: 'head'
-      });
-
-      // Torso Box (starts below head box with safe margin)
-      const tw = Math.round(sw * 0.85);
-      const ty = Math.round(hy + hh + 8);
-      const th = Math.round(Math.max(40, Math.min(height - ty, (effectiveMaxY - ty))));
-      const tx = Math.round(sx + (sw - tw) / 2);
-
-      if (th > 30) {
         boxes.push({
-          id: 'sub_torso',
-          label: 'PART_torso',
-          subLabel: 'OBJECT_clothing',
-          conf: '0.95',
-          x: tx,
-          y: ty,
-          width: tw,
-          height: th,
+          id: 'sub_main',
+          label: 'subject_track',
+          subLabel: 'biometric_hand_segment',
+          conf: '0.98',
+          x: Math.round(sx),
+          y: Math.round(sy),
+          width: Math.round(sw),
+          height: Math.round(sh),
+          type: 'subject'
+        });
+
+        // Digits / Phalanges Box
+        const dw = Math.round(sw * 0.88);
+        const dh = Math.round(sh * 0.42);
+        const dx = Math.round(sx + (sw - dw) / 2);
+        const dy = Math.round(sy + sh * 0.05);
+
+        boxes.push({
+          id: 'sub_digits',
+          label: 'PART_digits',
+          subLabel: 'phalanges_cluster',
+          conf: '0.97',
+          x: dx,
+          y: dy,
+          width: dw,
+          height: dh,
+          type: 'head'
+        });
+
+        // Palm / Metacarpal Box
+        const pw = Math.round(sw * 0.72);
+        const ph = Math.round(sh * 0.38);
+        const px = Math.round(sx + (sw - pw) / 2);
+        const py = Math.round(sy + sh * 0.54);
+
+        boxes.push({
+          id: 'sub_palm',
+          label: 'PART_palm',
+          subLabel: 'metacarpal_cluster',
+          conf: '0.96',
+          x: px,
+          y: py,
+          width: pw,
+          height: ph,
           type: 'torso'
         });
-      }
 
-      keypoints.push({ x: Math.round(hx + hw * 0.35), y: Math.round(hy + hh * 0.45), label: 'EYE-L' });
-      keypoints.push({ x: Math.round(hx + hw * 0.65), y: Math.round(hy + hh * 0.45), label: 'EYE-R' });
-      keypoints.push({ x: Math.round(hx + hw * 0.5), y: Math.round(hy + hh * 0.62), label: 'nose_tip' });
+        keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.12), label: 'DIGIT_03' });
+        keypoints.push({ x: Math.round(sx + sw * 0.28), y: Math.round(sy + sh * 0.18), label: 'DIGIT_02' });
+        keypoints.push({ x: Math.round(sx + sw * 0.72), y: Math.round(sy + sh * 0.22), label: 'DIGIT_04' });
+        keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.68), label: 'PALM_CTR' });
+        keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.90), label: 'CARPAL' });
+
+      } else {
+        // Full human / torso with real clothing detected below skin
+        const effectiveMinX = hasForeground ? Math.min(minSkinX, minFgX) : minSkinX;
+        const effectiveMaxX = hasForeground ? Math.max(maxSkinX, maxFgX) : maxSkinX;
+        const effectiveMinY = minSkinY;
+        const effectiveMaxY = hasForeground ? maxFgY : maxSkinY;
+
+        const padX = Math.round((effectiveMaxX - effectiveMinX) * 0.05);
+        const padY = Math.round((effectiveMaxY - effectiveMinY) * 0.05);
+        const sx = Math.max(0, effectiveMinX - padX);
+        const sy = Math.max(0, effectiveMinY - padY);
+        const sw = Math.min(width - sx, (effectiveMaxX - effectiveMinX) + padX * 2);
+        const sh = Math.min(height - sy, (effectiveMaxY - effectiveMinY) + padY * 2);
+
+        boxes.push({
+          id: 'sub_main',
+          label: 'subject_track',
+          subLabel: 'ID:001A_person',
+          conf: '0.98',
+          x: Math.round(sx),
+          y: Math.round(sy),
+          width: Math.round(sw),
+          height: Math.round(sh),
+          type: 'subject'
+        });
+
+        // Head / Face Box
+        const hw = Math.round((maxSkinX - minSkinX) * 1.05);
+        const hh = Math.round((maxSkinY - minSkinY) * 1.05);
+        const hx = Math.round(Math.max(0, minSkinX - (hw - (maxSkinX - minSkinX)) / 2));
+        const hy = Math.round(Math.max(0, minSkinY - (hh - (maxSkinY - minSkinY)) / 2));
+
+        boxes.push({
+          id: 'sub_head',
+          label: 'PART_head',
+          subLabel: 'face_profile',
+          conf: '0.98',
+          x: hx,
+          y: hy,
+          width: Math.min(width - hx, hw),
+          height: Math.min(height - hy, hh),
+          type: 'head'
+        });
+
+        // Torso Box
+        const tw = Math.round(sw * 0.85);
+        const ty = Math.round(hy + hh + 8);
+        const th = Math.round(Math.max(40, Math.min(height - ty, (effectiveMaxY - ty))));
+        const tx = Math.round(sx + (sw - tw) / 2);
+
+        if (th > 30) {
+          boxes.push({
+            id: 'sub_torso',
+            label: 'PART_torso',
+            subLabel: 'OBJECT_clothing',
+            conf: '0.95',
+            x: tx,
+            y: ty,
+            width: tw,
+            height: th,
+            type: 'torso'
+          });
+        }
+
+        keypoints.push({ x: Math.round(hx + hw * 0.35), y: Math.round(hy + hh * 0.45), label: 'EYE-L' });
+        keypoints.push({ x: Math.round(hx + hw * 0.65), y: Math.round(hy + hh * 0.45), label: 'EYE-R' });
+        keypoints.push({ x: Math.round(hx + hw * 0.5), y: Math.round(hy + hh * 0.62), label: 'nose_tip' });
+      }
     }
 
   } else {

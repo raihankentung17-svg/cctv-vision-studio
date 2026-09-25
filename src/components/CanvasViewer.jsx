@@ -329,19 +329,20 @@ export default function CanvasViewer({
         isDark ? 'bg-[#06080c] text-slate-200' : 'bg-slate-200 text-slate-900'
       }`}
     >
-      {/* Top Floating Cyber Toolbar (when image is loaded) */}
+      {/* Dedicated Top Cyber Controls Bar (Non-occluding, leaves canvas 100% visible) */}
       {imageSrc && (
-        <>
-          <div
-            className={`absolute top-4 left-4 z-20 flex items-center gap-1.5 p-1.5 rounded-lg border shadow-lg text-xs transition-colors ${
-              isDark
-                ? 'bg-[#0f141f] border-slate-700 text-slate-200'
-                : 'bg-white border-slate-300 text-slate-800'
-            }`}
-          >
+        <header
+          className={`h-14 px-3 border-b shrink-0 flex items-center justify-between z-20 overflow-x-auto text-xs transition-colors select-none ${
+            isDark
+              ? 'bg-[#0a0e17] border-slate-800 text-slate-200 shadow-sm'
+              : 'bg-white border-slate-300 text-slate-800 shadow-xs'
+          }`}
+        >
+          {/* Left Action Tools */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveTool('crosshair')}
-              className={`min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 activeTool === 'crosshair' && !isSpacePressed
                   ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
                   : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
@@ -354,7 +355,7 @@ export default function CanvasViewer({
 
             <button
               onClick={() => setActiveTool('pan')}
-              className={`min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 activeTool === 'pan' || isSpacePressed
                   ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
                   : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
@@ -365,7 +366,7 @@ export default function CanvasViewer({
               <span className="hidden sm:inline">Pan</span>
             </button>
 
-            <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
 
             <button
               onMouseDown={() => setIsHoldingOriginal(true)}
@@ -373,7 +374,7 @@ export default function CanvasViewer({
               onMouseLeave={() => setIsHoldingOriginal(false)}
               onTouchStart={() => setIsHoldingOriginal(true)}
               onTouchEnd={() => setIsHoldingOriginal(false)}
-              className={`min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 isHoldingOriginal
                   ? 'bg-amber-400 text-slate-950 font-bold'
                   : isDark ? 'hover:bg-slate-800 text-amber-300' : 'hover:bg-slate-100 text-amber-800'
@@ -384,59 +385,80 @@ export default function CanvasViewer({
               <span className="hidden sm:inline">Compare</span>
             </button>
 
-            <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
 
             {/* Quick Aspect Ratio Selector */}
             <div className="flex items-center gap-1">
-              <span className={`text-[10px] font-bold uppercase hidden md:inline px-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Ratio:
+              <span className={`text-[10px] font-bold uppercase hidden md:inline px-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Format:
               </span>
               <select
                 value={aspectRatio}
                 onChange={(e) => onChangeAspectRatio && onChangeAspectRatio(e.target.value)}
-                className={`min-h-[44px] px-2 py-1 rounded text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                className={`min-h-[38px] px-2 py-1 rounded text-xs font-mono font-bold border transition-colors cursor-pointer ${
                   isDark
                     ? 'bg-slate-900 border-slate-700 text-cyan-400 hover:border-cyan-500'
                     : 'bg-slate-50 border-slate-300 text-cyan-800 hover:border-cyan-500'
                 }`}
-                title="Pilih Aspek Rasio Canvas"
+                title="Pilih Format / Aspek Rasio Kanvas"
               >
                 {ASPECT_RATIOS.map((r) => (
                   <option key={r.id} value={r.id} className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
-                    {r.id.toUpperCase()} ({r.name})
+                    {r.name} ({r.label})
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* Framing Mode (Smart Fit vs Contain vs Cover) */}
+            {aspectRatio !== 'original' && aspectRatio !== 'smart_focus' && (
+              <div className="flex items-center gap-1">
+                <select
+                  value={fitMode}
+                  onChange={(e) => onChangeFitMode && onChangeFitMode(e.target.value)}
+                  className={`min-h-[38px] px-2 py-1 rounded text-xs font-bold border transition-colors cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-700 text-amber-400 hover:border-amber-500'
+                      : 'bg-slate-50 border-slate-300 text-amber-800 hover:border-amber-500'
+                  }`}
+                  title="Pilih Mode Penataan Kanvas"
+                >
+                  <option value="smart_fit" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
+                    Smart Fit (Fokus Subjek)
+                  </option>
+                  <option value="contain" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
+                    Contain (Utuh + Padding)
+                  </option>
+                  <option value="cover" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
+                    Cover (Penuhi Frame)
+                  </option>
+                </select>
+              </div>
+            )}
+
             {/* Quick Auto-Trim Whitespace Button */}
             <button
               onClick={() => onChangeAutoTrim && onChangeAutoTrim(!autoTrim)}
-              className={`min-h-[44px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 autoTrim
                   ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
                   : isDark
-                  ? 'hover:bg-slate-800 text-slate-300'
-                  : 'hover:bg-slate-100 text-slate-700'
+                  ? 'hover:bg-slate-800 text-slate-300 border border-slate-700'
+                  : 'hover:bg-slate-100 text-slate-700 border border-slate-300'
               }`}
               title="Auto-Trim Whitespace: Pangkas margin putih kosong di sekitar subjek"
             >
-              <Crop className="w-4 h-4" />
-              <span className="hidden lg:inline text-xs">{autoTrim ? 'Trim ON' : 'Trim OFF'}</span>
+              <Crop className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-xs">{autoTrim ? 'Trim Aktif' : 'Trim Void'}</span>
             </button>
           </div>
 
-          <div
-            className={`absolute top-4 right-4 z-20 flex items-center gap-1 p-1.5 rounded-lg border shadow-lg text-xs transition-colors ${
-              isDark
-                ? 'bg-[#0f141f] border-slate-700 text-slate-200'
-                : 'bg-white border-slate-300 text-slate-800'
-            }`}
-          >
+          {/* Right Zoom & Viewport Controls */}
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={zoomIn}
               aria-label="Zoom In"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
               }`}
               title="Zoom In (Scroll Up)"
@@ -447,7 +469,7 @@ export default function CanvasViewer({
             <button
               onClick={zoomOut}
               aria-label="Zoom Out"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
               }`}
               title="Zoom Out (Scroll Down)"
@@ -457,7 +479,7 @@ export default function CanvasViewer({
 
             <button
               onClick={handleActualSize}
-              className={`min-h-[44px] px-2.5 flex items-center justify-center rounded-md transition-colors cursor-pointer text-xs font-mono font-bold ${
+              className={`h-9 px-2 flex items-center justify-center rounded-md transition-colors cursor-pointer text-xs font-mono font-bold ${
                 isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-900'
               }`}
               title="100% Native Resolution"
@@ -468,10 +490,10 @@ export default function CanvasViewer({
             <button
               onClick={handleFitToScreen}
               aria-label="Fit to Screen"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
               }`}
-              title="Fit to Screen"
+              title="Fit to Screen: Sesuaikan ukuran kanvas dengan layar"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -482,7 +504,7 @@ export default function CanvasViewer({
                 setScale(1.0);
               }}
               aria-label="Reset Zoom & Pan"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
               }`}
               title="Reset Zoom & Pan"
@@ -490,12 +512,12 @@ export default function CanvasViewer({
               <RotateCcw className="w-4 h-4" />
             </button>
 
-            <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
 
             <button
               onClick={() => setShowHUDGrid(!showHUDGrid)}
               aria-label="Toggle Coordinate Grid"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 showHUDGrid
                   ? 'bg-cyan-500/20 text-cyan-500 font-bold'
                   : isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
@@ -508,7 +530,7 @@ export default function CanvasViewer({
             <button
               onClick={() => setShowScanlines(!showScanlines)}
               aria-label="Toggle Retro CRT Scanlines"
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
                 showScanlines
                   ? 'bg-cyan-500/20 text-cyan-500 font-bold'
                   : isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
@@ -518,7 +540,7 @@ export default function CanvasViewer({
               <Monitor className="w-4 h-4" />
             </button>
           </div>
-        </>
+        </header>
       )}
 
       {/* Center Viewport (Solid matte background, NO decorative dot grid) */}

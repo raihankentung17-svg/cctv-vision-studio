@@ -238,15 +238,28 @@ export default function ControlPanel({
           </div>
 
           {/* Framing Fit Mode (Shown when an explicit ratio is selected) */}
-          {aspectRatio !== 'original' && (
-            <div className="flex items-center justify-between pt-1">
-              <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                Framing Mode:
+          {aspectRatio !== 'original' && aspectRatio !== 'smart_focus' && (
+            <div className="space-y-1.5 pt-1">
+              <span className={`text-xs font-semibold block ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Framing & Fit Mode:
               </span>
-              <div className="flex items-center gap-1">
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  onClick={() => onChangeFitMode && onChangeFitMode('smart_fit')}
+                  className={`min-h-[36px] px-1.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                    fitMode === 'smart_fit'
+                      ? 'bg-cyan-500 text-slate-950 shadow-xs'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-300 hover:text-white'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}
+                  title="Smart Fit: Pangkas void otomatis & posisikan subjek proporsional"
+                >
+                  Smart Fit
+                </button>
                 <button
                   onClick={() => onChangeFitMode && onChangeFitMode('contain')}
-                  className={`min-h-[36px] px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-1.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
                     fitMode === 'contain'
                       ? 'bg-cyan-500 text-slate-950 shadow-xs'
                       : isDark
@@ -255,11 +268,11 @@ export default function ControlPanel({
                   }`}
                   title="Fit (Contain): Tampilkan seluruh gambar tanpa terpotong"
                 >
-                  Fit
+                  Fit Utuh
                 </button>
                 <button
                   onClick={() => onChangeFitMode && onChangeFitMode('cover')}
-                  className={`min-h-[36px] px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-1.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
                     fitMode === 'cover'
                       ? 'bg-cyan-500 text-slate-950 shadow-xs'
                       : isDark
@@ -268,7 +281,7 @@ export default function ControlPanel({
                   }`}
                   title="Fill (Cover): Penuhi seluruh frame canvas"
                 >
-                  Fill
+                  Penuh
                 </button>
               </div>
             </div>

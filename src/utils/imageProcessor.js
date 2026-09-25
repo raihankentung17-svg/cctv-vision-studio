@@ -4,16 +4,18 @@
  */
 
 export const ASPECT_RATIOS = [
-  { id: 'original', name: 'Original', ratio: null, label: 'Native' },
-  { id: '4:5', name: '4:5 Portrait', ratio: 4 / 5, label: '1080 × 1350 (Video)' },
-  { id: '1:1', name: '1:1 Square', ratio: 1, label: '1080 × 1080' },
-  { id: '9:16', name: '9:16 Vertical', ratio: 9 / 16, label: '1080 × 1920' },
-  { id: '16:9', name: '16:9 Widescreen', ratio: 16 / 9, label: '1920 × 1080' },
-  { id: '3:4', name: '3:4 CCTV Frame', ratio: 3 / 4, label: '960 × 1280' },
+  { id: 'original', name: 'Original', ratio: null, label: 'Native Resolusi' },
+  { id: 'smart_focus', name: 'Smart Focus', ratio: null, label: 'Pangkas Otomatis Subjek' },
+  { id: '4:5', name: '4:5 Portrait', ratio: 4 / 5, label: '1080 × 1350 (IG/Mobile)' },
+  { id: '1:1', name: '1:1 Square', ratio: 1, label: '1080 × 1080 (Feed)' },
+  { id: '9:16', name: '9:16 Vertical', ratio: 9 / 16, label: '1080 × 1920 (Reels/TikTok)' },
+  { id: '16:9', name: '16:9 Widescreen', ratio: 16 / 9, label: '1920 × 1080 (Monitor/Desktop)' },
+  { id: '3:4', name: '3:4 CCTV Frame', ratio: 3 / 4, label: '960 × 1280 (Standard CCTV)' },
 ];
 
 /**
  * Automatically detects non-background content bounds (trims excessive white/transparent margin)
+ * Uses dynamic background color sampling from outer perimeter for extreme robustness.
  */
 export function detectContentBounds(canvas) {
   const ctx = canvas.getContext('2d');
@@ -21,6 +23,30 @@ export function detectContentBounds(canvas) {
   const h = canvas.height;
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
+
+  // Sample outer perimeter corners and edges
+  const samplePoints = [
+    0, // top-left
+    Math.max(0, (w - 1) * 4), // top-right
+    Math.max(0, (h - 1) * w * 4), // bottom-left
+    Math.max(0, ((h - 1) * w + (w - 1)) * 4), // bottom-right
+    Math.max(0, Math.floor(w / 2) * 4), // top-center
+    Math.max(0, ((h - 1) * w + Math.floor(w / 2)) * 4) // bottom-center
+  ];
+
+  let sumR = 0, sumG = 0, sumB = 0, validSamples = 0;
+  samplePoints.forEach(p => {
+    if (p < data.length - 4) {
+      sumR += data[p];
+      sumG += data[p + 1];
+      sumB += data[p + 2];
+      validSamples++;
+    }
+  });
+
+  const bgR = validSamples ? sumR / validSamples : 255;
+  const bgG = validSamples ? sumG / validSamples : 255;
+  const bgB = validSamples ? sumB / validSamples : 255;
 
   let minX = w, maxX = 0, minY = h, maxY = 0;
   let hasContent = false;
@@ -34,11 +60,10 @@ export function detectContentBounds(canvas) {
       const b = data[p + 2];
       const a = data[p + 3];
 
-      // Exclude transparent or solid white background (> 245)
-      const isTransparent = a < 20;
-      const isPureWhite = r > 245 && g > 245 && b > 245;
+      const colorDiff = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+      const isForeground = a > 25 && colorDiff > 30;
 
-      if (!isTransparent && !isPureWhite) {
+      if (isForeground) {
         hasContent = true;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -52,9 +77,9 @@ export function detectContentBounds(canvas) {
     return { minX: 0, minY: 0, maxX: w, maxY: h, width: w, height: h };
   }
 
-  // Add 4% padding around subject
-  const padX = Math.round((maxX - minX) * 0.04);
-  const padY = Math.round((maxY - minY) * 0.04);
+  // Add 5% comfortable margin around subject
+  const padX = Math.round((maxX - minX) * 0.05);
+  const padY = Math.round((maxY - minY) * 0.05);
 
   const finalMinX = Math.max(0, minX - padX);
   const finalMinY = Math.max(0, minY - padY);
@@ -77,7 +102,7 @@ export function detectContentBounds(canvas) {
 export function prepareOptimizedImage(sourceImage, options = {}) {
   const {
     aspectRatioId = 'original',
-    fitMode = 'contain', // 'contain' | 'cover'
+    fitMode = 'smart_fit', // 'smart_fit' | 'contain' | 'cover'
     autoTrim = false,
     backgroundColor = '#ffffff'
   } = options;
@@ -92,11 +117,9 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
   const srcCtx = srcCanvas.getContext('2d');
   srcCtx.drawImage(sourceImage, 0, 0, rawW, rawH);
 
-  // Step 2: Auto-trim excessive whitespace if requested
-  let cropBox = { minX: 0, minY: 0, width: rawW, height: rawH };
-  if (autoTrim) {
-    cropBox = detectContentBounds(srcCanvas);
-  }
+  // Step 2: Auto-trim excessive whitespace if requested or in smart focus
+  const shouldTrim = autoTrim || aspectRatioId === 'smart_focus' || fitMode === 'smart_fit';
+  const cropBox = shouldTrim ? detectContentBounds(srcCanvas) : { minX: 0, minY: 0, width: rawW, height: rawH };
 
   const croppedCanvas = document.createElement('canvas');
   croppedCanvas.width = cropBox.width;
@@ -108,7 +131,14 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
     0, 0, cropBox.width, cropBox.height
   );
 
-  // If aspect ratio is original, return cropped canvas directly
+  // If aspect ratio is original or smart_focus, return cropped canvas directly
+  if (aspectRatioId === 'original' && !autoTrim) {
+    return srcCanvas;
+  }
+  if (aspectRatioId === 'original' || aspectRatioId === 'smart_focus') {
+    return croppedCanvas;
+  }
+
   const selectedPreset = ASPECT_RATIOS.find(a => a.id === aspectRatioId);
   if (!selectedPreset || !selectedPreset.ratio) {
     return croppedCanvas;
@@ -118,7 +148,7 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
   const targetRatio = selectedPreset.ratio;
   let targetW, targetH;
 
-  // Set normalized standard baseline dimensions
+  // Baseline standard high-definition dimensions
   if (targetRatio <= 1) {
     // Portrait or square
     targetW = 1080;
@@ -152,8 +182,19 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
       renderW = targetW;
       renderH = imgH * (targetW / imgW);
     }
+    renderX = Math.round((targetW - renderW) / 2);
+    renderY = Math.round((targetH - renderH) / 2);
+  } else if (fitMode === 'smart_fit') {
+    // Smart Fit: Centers the trimmed subject nicely with 8% padding inside the frame
+    const usableW = targetW * 0.90;
+    const usableH = targetH * 0.90;
+    const scale = Math.min(usableW / imgW, usableH / imgH);
+    renderW = Math.round(imgW * scale);
+    renderH = Math.round(imgH * scale);
+    renderX = Math.round((targetW - renderW) / 2);
+    renderY = Math.round((targetH - renderH) / 2);
   } else {
-    // Contain (default)
+    // Contain: Preserves whole image within bounds
     if (imgRatio > targetRatio) {
       renderW = targetW;
       renderH = imgH * (targetW / imgW);
@@ -161,10 +202,9 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
       renderH = targetH;
       renderW = imgW * (targetH / imgH);
     }
+    renderX = Math.round((targetW - renderW) / 2);
+    renderY = Math.round((targetH - renderH) / 2);
   }
-
-  renderX = Math.round((targetW - renderW) / 2);
-  renderY = Math.round((targetH - renderH) / 2);
 
   targetCtx.drawImage(croppedCanvas, renderX, renderY, renderW, renderH);
   return targetCanvas;
