@@ -27,10 +27,19 @@ export default function App() {
   const [sensorStatus, setSensorStatus] = useState(getSensorStatus());
   const [scanNotification, setScanNotification] = useState(null);
 
-  // Default empty canvas state ("dibuat kosong saja")
+  // Auto-dismiss scan notification after 5 seconds (R-26 / C-2)
+  useEffect(() => {
+    if (!scanNotification) return;
+    const timer = setTimeout(() => {
+      setScanNotification(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [scanNotification]);
+
+  // Default clean empty canvas state
   const [imageSrc, setImageSrc] = useState(null);
 
-  // Default style parameters (Tokyo Lavender classic)
+  // Default style parameters (Tokyo Lavender)
   const defaultPreset = STYLE_PRESETS[0];
   const [config, setConfig] = useState({
     themeColor: defaultPreset.themeColor,
@@ -55,7 +64,7 @@ export default function App() {
   const [boxes, setBoxes] = useState([]);
   const [keypoints, setKeypoints] = useState([]);
 
-  // Initialize MediaPipe sensor on mount with status monitoring
+  // Initialize MediaPipe sensor on mount
   useEffect(() => {
     initMediaPipe().then(() => {
       setSensorStatus(getSensorStatus());
@@ -93,10 +102,18 @@ export default function App() {
         setIsScanning(false);
       }
     };
+    img.onerror = () => {
+      setIsScanning(false);
+      setScanNotification({
+        type: 'error',
+        title: 'Gagal Memuat Gambar',
+        message: 'File gambar tidak dapat dibaca atau rusak.'
+      });
+    };
     img.src = dataUrl;
   };
 
-  // Select style preset (changes parameters without injecting cartoon drawings)
+  // Select style preset
   const handleSelectPreset = (preset) => {
     setConfig((prev) => ({
       ...prev,
@@ -143,11 +160,14 @@ export default function App() {
         setScanNotification({
           type: 'error',
           title: 'Sensor Fallback',
-          message: 'Deteksi anatomi dialihkan ke sistem Computer Vision Saliency.'
+          message: 'Deteksi dialihkan ke sistem Computer Vision Saliency.'
         });
       } finally {
         setIsScanning(false);
       }
+    };
+    img.onerror = () => {
+      setIsScanning(false);
     };
     img.src = imageSrc;
   };
@@ -179,8 +199,8 @@ export default function App() {
 
   return (
     <div
-      className={`flex flex-col h-screen w-screen overflow-hidden font-tech transition-colors duration-200 ${
-        theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-100 text-slate-900'
+      className={`flex flex-col h-screen w-screen overflow-hidden font-tech transition-colors duration-150 ${
+        theme === 'dark' ? 'bg-[#06080c] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
       {/* Top Navbar */}
@@ -208,6 +228,7 @@ export default function App() {
           onRunMediaPipeScan={handleRunMediaPipeScan}
           isScanning={isScanning}
           scanNotification={scanNotification}
+          onDismissNotification={() => setScanNotification(null)}
           sensorStatus={sensorStatus}
           boxes={boxes}
           onUpdateBoxes={setBoxes}

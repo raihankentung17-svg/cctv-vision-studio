@@ -7,7 +7,7 @@ import {
   RefreshCw,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle
+  X
 } from 'lucide-react';
 import BoxManager from './BoxManager';
 
@@ -29,6 +29,7 @@ export default function ControlPanel({
   onRunMediaPipeScan,
   isScanning,
   scanNotification,
+  onDismissNotification,
   sensorStatus,
   boxes,
   onUpdateBoxes,
@@ -64,32 +65,32 @@ export default function ControlPanel({
 
   return (
     <aside
-      className={`w-full lg:w-84 xl:w-92 h-full border-r flex flex-col font-tech text-xs select-none transition-colors duration-200 ${
+      className={`w-full lg:w-84 xl:w-92 h-full border-r flex flex-col font-tech text-xs select-none transition-colors duration-150 ${
         isDark
-          ? 'border-slate-800 bg-[#0a0d14] text-slate-100'
-          : 'border-slate-200 bg-white text-slate-900 shadow-xs'
+          ? 'border-slate-800 bg-[#0c1017] text-slate-100'
+          : 'border-slate-300 bg-white text-slate-900 shadow-xs'
       }`}
     >
       {/* Panel Header */}
       <div
         className={`p-3.5 border-b flex items-center justify-between transition-colors ${
-          isDark ? 'border-slate-800 bg-[#0e121b]' : 'border-slate-200 bg-slate-50'
+          isDark ? 'border-slate-800 bg-[#121722]' : 'border-slate-200 bg-slate-100'
         }`}
       >
         <div className="flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-cyan-500" />
+          <Sliders className="w-4 h-4 text-cyan-600" />
           <span className="font-bold tracking-wider uppercase text-xs">Vision Control Matrix</span>
         </div>
         <button
           onClick={handleRandomizeSeed}
-          className={`flex items-center gap-1 px-2 py-1 rounded border transition-colors cursor-pointer text-[11px] ${
+          className={`min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded border transition-colors cursor-pointer text-xs font-semibold ${
             isDark
-              ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white'
-              : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+              ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
+              : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
           }`}
           title="Randomize glitch seed"
         >
-          <RefreshCw className="w-3 h-3 text-cyan-500" />
+          <RefreshCw className="w-3.5 h-3.5 text-cyan-600" />
           <span>Glitch Seed</span>
         </button>
       </div>
@@ -99,8 +100,8 @@ export default function ControlPanel({
         {/* 1. Image Source & MediaPipe AI Scan */}
         <section className="space-y-2">
           <div
-            className={`flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider ${
-              isDark ? 'text-slate-400' : 'text-slate-500'
+            className={`flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
+              isDark ? 'text-slate-300' : 'text-slate-800'
             }`}
           >
             <span>Input Image & MediaPipe</span>
@@ -116,48 +117,57 @@ export default function ControlPanel({
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border transition-all cursor-pointer font-medium ${
+              className={`min-h-[44px] flex items-center justify-center gap-1.5 p-2 rounded-lg border transition-all cursor-pointer font-bold ${
                 isDark
                   ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
-                  : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-900'
               }`}
             >
-              <Upload className="w-3.5 h-3.5 text-cyan-500" />
+              <Upload className="w-4 h-4 text-cyan-600" />
               <span>Upload Foto</span>
             </button>
 
             <button
               onClick={onRunMediaPipeScan}
               disabled={isScanning || !hasImage}
-              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border transition-all cursor-pointer font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+              className={`min-h-[44px] flex items-center justify-center gap-1.5 p-2 rounded-lg border transition-all cursor-pointer font-bold disabled:opacity-30 disabled:cursor-not-allowed ${
                 isDark
-                  ? 'bg-cyan-950/70 hover:bg-cyan-900/90 border-cyan-700/80 text-cyan-300'
-                  : 'bg-cyan-100 hover:bg-cyan-200 border-cyan-300 text-cyan-900 font-semibold'
+                  ? 'bg-cyan-950/70 hover:bg-cyan-900 border-cyan-700 text-cyan-300'
+                  : 'bg-cyan-100 hover:bg-cyan-200 border-cyan-400 text-cyan-950'
               }`}
             >
-              <Cpu className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+              <Cpu className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
               <span>{isScanning ? 'Scanning...' : 'Scan MediaPipe'}</span>
             </button>
           </div>
 
-          {/* Scan Notification Banner */}
+          {/* Dismissible Scan Notification Banner (R-26 / C-2) */}
           {scanNotification && (
             <div
-              className={`p-2 rounded-lg border text-[11px] flex items-start gap-2 ${
+              className={`p-2.5 rounded-lg border text-xs flex items-start justify-between gap-2 animate-in fade-in duration-200 ${
                 scanNotification.type === 'success'
                   ? isDark
-                    ? 'bg-emerald-950/40 border-emerald-800/70 text-emerald-300'
-                    : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                    ? 'bg-emerald-950/50 border-emerald-800 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-900'
                   : isDark
-                  ? 'bg-amber-950/40 border-amber-800/70 text-amber-300'
-                  : 'bg-amber-50 border-amber-300 text-amber-800'
+                  ? 'bg-cyan-950/50 border-cyan-800 text-cyan-300'
+                  : 'bg-cyan-50 border-cyan-300 text-cyan-900'
               }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <div className="leading-tight">
-                <span className="font-bold block">{scanNotification.title}</span>
-                <span className="text-[10px] opacity-90">{scanNotification.message}</span>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                <div className="leading-tight">
+                  <span className="font-bold block">{scanNotification.title}</span>
+                  <span className="text-[11px] opacity-90">{scanNotification.message}</span>
+                </div>
               </div>
+              <button
+                onClick={onDismissNotification}
+                aria-label="Tutup notifikasi"
+                className="p-1 rounded hover:bg-black/20 text-current transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </section>
@@ -165,15 +175,15 @@ export default function ControlPanel({
         {/* 2. Color Palette Selector */}
         <section className="space-y-2.5">
           <div
-            className={`flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider ${
-              isDark ? 'text-slate-400' : 'text-slate-500'
+            className={`flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
+              isDark ? 'text-slate-300' : 'text-slate-800'
             }`}
           >
             <div className="flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-cyan-500" />
+              <Palette className="w-4 h-4 text-cyan-600" />
               <span>Theme Palette</span>
             </div>
-            <span className="text-[10px] font-mono">{config.themeColor}</span>
+            <span className="text-xs font-mono font-bold">{config.themeColor}</span>
           </div>
 
           <div className="grid grid-cols-4 gap-2">
@@ -181,19 +191,19 @@ export default function ControlPanel({
               <button
                 key={preset.name}
                 onClick={() => handleColorSelect(preset)}
-                className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border transition-all cursor-pointer ${
+                className={`min-h-[52px] flex flex-col items-center justify-center gap-1 p-2 rounded-lg border transition-all cursor-pointer ${
                   config.themeColor.toLowerCase() === preset.hex.toLowerCase()
-                    ? 'border-cyan-500 bg-cyan-500/10 shadow-sm shadow-cyan-500/20'
+                    ? 'border-cyan-500 bg-cyan-500/10 shadow-sm'
                     : isDark
                     ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
-                    : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                    : 'border-slate-300 bg-slate-50 hover:border-slate-400'
                 }`}
               >
                 <span
                   className="w-5 h-5 rounded-full border border-black/30 shadow-inner"
                   style={{ backgroundColor: preset.hex }}
                 />
-                <span className="text-[9px] text-center leading-tight truncate w-full">
+                <span className={`text-[10px] font-medium text-center leading-tight truncate w-full ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
                   {preset.name.split(' ')[0]}
                 </span>
               </button>
@@ -202,7 +212,7 @@ export default function ControlPanel({
 
           {/* Custom Hex Color Picker */}
           <div className="flex items-center gap-2 pt-0.5">
-            <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               Custom Color:
             </span>
             <input
@@ -214,7 +224,7 @@ export default function ControlPanel({
                   colorName: 'Custom'
                 })
               }
-              className="w-7 h-6 rounded border border-slate-400 bg-transparent cursor-pointer"
+              className="w-8 h-8 rounded border border-slate-400 bg-transparent cursor-pointer"
             />
             <input
               type="text"
@@ -225,31 +235,31 @@ export default function ControlPanel({
                   colorName: 'Custom'
                 })
               }
-              className={`w-20 px-2 py-0.5 rounded border text-xs font-mono uppercase ${
-                isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-900'
+              className={`w-24 px-2.5 py-1 rounded border text-xs font-mono font-bold uppercase ${
+                isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
               }`}
             />
           </div>
         </section>
 
-        {/* 3. Detection Mode System (Contrast, Bright, Dark, Combined) */}
+        {/* 3. Detection Mode System */}
         <section
-          className={`space-y-3 p-3 rounded-lg border ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+          className={`space-y-3 p-3.5 rounded-lg border ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-300 shadow-xs'
           }`}
         >
           <div
-            className={`flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider ${
-              isDark ? 'text-slate-300' : 'text-slate-800'
+            className={`flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
+              isDark ? 'text-slate-200' : 'text-slate-900'
             }`}
           >
             <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-cyan-500" />
+              <ShieldCheck className="w-4 h-4 text-cyan-600" />
               <span>Detection System</span>
             </div>
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                isDark ? 'bg-cyan-950 text-cyan-300' : 'bg-cyan-100 text-cyan-800'
+              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                isDark ? 'bg-cyan-950 text-cyan-300' : 'bg-cyan-100 text-cyan-900'
               }`}
             >
               {config.detectionMode}
@@ -257,39 +267,39 @@ export default function ControlPanel({
           </div>
 
           {/* 4 Mode Buttons */}
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { id: 'dark', label: 'Dark (Shadows)', desc: 'Lipatan & bayangan blazer/jeans' },
-              { id: 'bright', label: 'Bright (Highlights)', desc: 'Area terik sinar & salju' },
-              { id: 'contrast', label: 'Contrast (Edges)', desc: 'Garis kontur & silhouette' },
-              { id: 'combined', label: 'Combined (Hybrid)', desc: 'Sistem gabungan edge & luma' }
+              { id: 'dark', title: 'Dark', subtitle: '(Shadows)' },
+              { id: 'bright', title: 'Bright', subtitle: '(Highlights)' },
+              { id: 'contrast', title: 'Contrast', subtitle: '(Edges)' },
+              { id: 'combined', title: 'Combined', subtitle: '(Hybrid)' }
             ].map((m) => (
               <button
                 key={m.id}
                 onClick={() => onChangeConfig({ detectionMode: m.id })}
-                className={`p-2 rounded text-left border transition-all cursor-pointer ${
+                className={`min-h-[48px] p-2.5 rounded-md text-left border transition-all cursor-pointer ${
                   config.detectionMode === m.id
                     ? isDark
-                      ? 'border-cyan-400 bg-cyan-950/40 text-cyan-200 font-bold'
-                      : 'border-cyan-500 bg-cyan-100 text-cyan-900 font-bold'
+                      ? 'border-cyan-400 bg-cyan-950/50 text-cyan-200 font-bold'
+                      : 'border-cyan-500 bg-cyan-100 text-cyan-950 font-bold'
                     : isDark
-                    ? 'border-slate-800 bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                    : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900'
+                    ? 'border-slate-800 bg-slate-900/40 text-slate-300 hover:text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:text-slate-950 hover:border-slate-400'
                 }`}
               >
-                <div className="text-[11px]">{m.label.split(' ')[0]}</div>
-                <div className="text-[9px] opacity-75 font-normal leading-tight">{m.label.split(' ')[1]}</div>
+                <div className="text-xs font-bold">{m.title}</div>
+                <div className="text-[10px] opacity-80 font-normal leading-tight">{m.subtitle}</div>
               </button>
             ))}
           </div>
 
-          {/* Sliders */}
+          {/* Sliders (High contrast labels) */}
           <div className="space-y-3 pt-1">
             {config.detectionMode === 'dark' && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[11px]">
+                <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   <span>Dark Threshold (Shadows):</span>
-                  <span className="text-cyan-500 font-mono">{config.darkThreshold}</span>
+                  <span className="text-cyan-600 font-mono font-bold">{config.darkThreshold}</span>
                 </div>
                 <input
                   type="range"
@@ -297,16 +307,16 @@ export default function ControlPanel({
                   max="180"
                   value={config.darkThreshold}
                   onChange={(e) => onChangeConfig({ darkThreshold: parseInt(e.target.value) })}
-                  className="w-full accent-cyan-500 cursor-pointer"
+                  className="w-full accent-cyan-500 cursor-pointer h-2"
                 />
               </div>
             )}
 
             {config.detectionMode === 'bright' && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[11px]">
+                <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   <span>Bright Threshold (Highlights):</span>
-                  <span className="text-cyan-500 font-mono">{config.brightThreshold}</span>
+                  <span className="text-cyan-600 font-mono font-bold">{config.brightThreshold}</span>
                 </div>
                 <input
                   type="range"
@@ -314,16 +324,16 @@ export default function ControlPanel({
                   max="240"
                   value={config.brightThreshold}
                   onChange={(e) => onChangeConfig({ brightThreshold: parseInt(e.target.value) })}
-                  className="w-full accent-cyan-500 cursor-pointer"
+                  className="w-full accent-cyan-500 cursor-pointer h-2"
                 />
               </div>
             )}
 
             {(config.detectionMode === 'contrast' || config.detectionMode === 'combined') && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[11px]">
+                <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   <span>Contrast Sensitivity (Sobel):</span>
-                  <span className="text-cyan-500 font-mono">{config.contrastThreshold}</span>
+                  <span className="text-cyan-600 font-mono font-bold">{config.contrastThreshold}</span>
                 </div>
                 <input
                   type="range"
@@ -331,16 +341,16 @@ export default function ControlPanel({
                   max="90"
                   value={config.contrastThreshold}
                   onChange={(e) => onChangeConfig({ contrastThreshold: parseInt(e.target.value) })}
-                  className="w-full accent-cyan-500 cursor-pointer"
+                  className="w-full accent-cyan-500 cursor-pointer h-2"
                 />
               </div>
             )}
 
             {/* Stepped Pixel Block Size */}
             <div className="space-y-1">
-              <div className="flex justify-between text-[11px]">
+              <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 <span>Glitch Block Size (Stepped Pixel):</span>
-                <span className="text-cyan-500 font-mono">{config.blockSize}px</span>
+                <span className="text-cyan-600 font-mono font-bold">{config.blockSize}px</span>
               </div>
               <input
                 type="range"
@@ -349,15 +359,15 @@ export default function ControlPanel({
                 step="2"
                 value={config.blockSize}
                 onChange={(e) => onChangeConfig({ blockSize: parseInt(e.target.value) })}
-                className="w-full accent-cyan-500 cursor-pointer"
+                className="w-full accent-cyan-500 cursor-pointer h-2"
               />
             </div>
 
             {/* Glitch Density */}
             <div className="space-y-1">
-              <div className="flex justify-between text-[11px]">
+              <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 <span>Glitch Density:</span>
-                <span className="text-cyan-500 font-mono">{config.density}%</span>
+                <span className="text-cyan-600 font-mono font-bold">{config.density}%</span>
               </div>
               <input
                 type="range"
@@ -365,12 +375,12 @@ export default function ControlPanel({
                 max="95"
                 value={config.density}
                 onChange={(e) => onChangeConfig({ density: parseInt(e.target.value) })}
-                className="w-full accent-cyan-500 cursor-pointer"
+                className="w-full accent-cyan-500 cursor-pointer h-2"
               />
             </div>
 
             {/* Confinement Toggle */}
-            <label className="flex items-center justify-between pt-1 text-[11px] cursor-pointer">
+            <label className={`flex items-center justify-between pt-1 text-xs font-semibold cursor-pointer ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               <span>Confine to Tracked Subject:</span>
               <input
                 type="checkbox"
@@ -384,65 +394,65 @@ export default function ControlPanel({
 
         {/* 4. Display & Telemetry Toggles */}
         <section
-          className={`space-y-2 p-3 rounded-lg border text-[11px] ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+          className={`space-y-2.5 p-3.5 rounded-lg border text-xs font-medium ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-300'
           }`}
         >
           <span
-            className={`font-semibold uppercase tracking-wider block mb-1 ${
-              isDark ? 'text-slate-300' : 'text-slate-800'
+            className={`font-bold uppercase tracking-wider block mb-1 text-xs ${
+              isDark ? 'text-slate-200' : 'text-slate-900'
             }`}
           >
             Display & Overlays
           </span>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span>Show Detection Boxes</span>
+          <label className="flex items-center justify-between cursor-pointer py-0.5">
+            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Show Detection Boxes</span>
             <input
               type="checkbox"
               checked={config.showBoxes}
               onChange={(e) => onChangeConfig({ showBoxes: e.target.checked })}
-              className="accent-cyan-500 w-3.5 h-3.5"
+              className="accent-cyan-500 w-4 h-4"
             />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span>Show Tracking Crosses (+)</span>
+          <label className="flex items-center justify-between cursor-pointer py-0.5">
+            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Show Tracking Crosses (+)</span>
             <input
               type="checkbox"
               checked={config.showKeypoints}
               onChange={(e) => onChangeConfig({ showKeypoints: e.target.checked })}
-              className="accent-cyan-500 w-3.5 h-3.5"
+              className="accent-cyan-500 w-4 h-4"
             />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span>Show Corner Reticles (⌜ ⌝)</span>
+          <label className="flex items-center justify-between cursor-pointer py-0.5">
+            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Show Corner Reticles (⌜ ⌝)</span>
             <input
               type="checkbox"
               checked={config.cornerTicks}
               onChange={(e) => onChangeConfig({ cornerTicks: e.target.checked })}
-              className="accent-cyan-500 w-3.5 h-3.5"
+              className="accent-cyan-500 w-4 h-4"
             />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span>Show Diagnostic Hex Code</span>
+          <label className="flex items-center justify-between cursor-pointer py-0.5">
+            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Show Diagnostic Hex Code</span>
             <input
               type="checkbox"
               checked={config.showDiagnosticCode}
               onChange={(e) => onChangeConfig({ showDiagnosticCode: e.target.checked })}
-              className="accent-cyan-500 w-3.5 h-3.5"
+              className="accent-cyan-500 w-4 h-4"
             />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span>Show CCTV Telemetry & REC</span>
+          <label className="flex items-center justify-between cursor-pointer py-0.5">
+            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Show CCTV Telemetry & REC</span>
             <input
               type="checkbox"
               checked={config.showTelemetry}
               onChange={(e) => onChangeConfig({ showTelemetry: e.target.checked })}
-              className="accent-cyan-500 w-3.5 h-3.5"
+              className="accent-cyan-500 w-4 h-4"
             />
           </label>
         </section>
