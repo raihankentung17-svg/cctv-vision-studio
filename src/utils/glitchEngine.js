@@ -350,19 +350,26 @@ function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight, S) 
     const displayConf = conf !== undefined ? conf : '0.98';
     const mainText = label ? `[${label}]` : '[subject_track]';
     const subText = subLabel ? ` ${subLabel}` : '';
-    const fullTag = `${mainText}${subText} conf: ${displayConf}`;
+    let fullTag = `${mainText}${subText} conf: ${displayConf}`;
 
     ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
     ctx.textBaseline = 'bottom';
     
-    const textWidth = ctx.measureText(fullTag).width;
+    let textWidth = ctx.measureText(fullTag).width;
+    if (textWidth > width - 16) {
+      fullTag = `[${label || 'track'}] ${displayConf}`;
+      textWidth = ctx.measureText(fullTag).width;
+    }
+
+    const badgeW = textWidth + Math.round(8 * S);
+    const badgeX = Math.max(2, Math.min(x, width - badgeW - 2));
     const badgeY = Math.max(0, y - badgeH);
 
     ctx.fillStyle = 'rgba(7, 9, 14, 0.85)';
-    ctx.fillRect(x, badgeY, textWidth + Math.round(8 * S), badgeH);
+    ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
 
     ctx.fillStyle = themeColor;
-    ctx.fillText(fullTag, x + Math.round(4 * S), y - Math.round(3 * S));
+    ctx.fillText(fullTag, badgeX + Math.round(4 * S), y - Math.round(3 * S));
   }
 
   ctx.restore();
@@ -406,36 +413,58 @@ function renderCCTVTelemetry(ctx, width, height, options, S) {
     watermark = 'CREATED BY VISION_STUDIO'
   } = options.telemetry || {};
 
-  const fontSize = Math.max(10, Math.round(11 * S));
-  const marginX = Math.round(16 * S);
-  const marginY = Math.round(16 * S);
+  // Fit font size and margins to the actual canvas width
+  const baseFontSize = Math.round(11 * S);
+  const fontSize = Math.max(8, Math.min(baseFontSize, Math.floor(width / 34)));
+  const marginX = Math.max(6, Math.min(Math.round(16 * S), Math.floor(width * 0.04)));
+  const marginY = Math.max(6, Math.min(Math.round(16 * S), Math.floor(height * 0.03)));
 
   ctx.save();
   ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'top';
 
-  // Left Tag: [CCTV_04] ID: 001A_person CONF: 0.98
-  const leftTag = `[${cctvTag}] ${subjectId} ${confidence}`;
-  ctx.fillText(leftTag, marginX, marginY);
+  if (width >= 480) {
+    // Wide Canvas Layout: Standard single line
+    const leftTag = `[${cctvTag}] ${subjectId} ${confidence}`;
+    ctx.fillText(leftTag, marginX, marginY);
 
-  // Right Tag: FRAME: 0234  2030
-  const rightTag = `${frameNumber}  2030`;
-  const rightWidth = ctx.measureText(rightTag).width;
-  ctx.fillText(rightTag, Math.max(width - rightWidth - marginX, marginX), marginY);
+    const rightTag = `${frameNumber}  2030`;
+    const rightWidth = ctx.measureText(rightTag).width;
+    ctx.fillText(rightTag, width - rightWidth - marginX, marginY);
 
-  // Center Watermark only if there is sufficient width
-  const leftWidth = ctx.measureText(leftTag).width;
-  const wmWidth = ctx.measureText(watermark).width;
-  const availableSpace = width - leftWidth - rightWidth - marginX * 4;
+    const leftWidth = ctx.measureText(leftTag).width;
+    const wmWidth = ctx.measureText(watermark).width;
+    if (width - leftWidth - rightWidth - marginX * 4 > wmWidth + 20) {
+      ctx.fillText(watermark, (width - wmWidth) / 2, marginY);
+    }
+  } else if (width >= 300) {
+    // Medium / Compact Single Line Layout
+    const leftTag = `[${cctvTag}] ${subjectId.replace('person', '')}`;
+    ctx.fillText(leftTag, marginX, marginY);
 
-  if (availableSpace > wmWidth + 20) {
-    ctx.fillText(watermark, (width - wmWidth) / 2, marginY);
+    const rightTag = `${frameNumber}`;
+    const rightWidth = ctx.measureText(rightTag).width;
+    ctx.fillText(rightTag, Math.max(marginX + ctx.measureText(leftTag).width + 8, width - rightWidth - marginX), marginY);
+  } else {
+    // Ultra-Narrow Canvas Layout (< 300px): Clean 2-row telemetry so nothing ever clips
+    const row1Left = `[${cctvTag}]`;
+    const row1Right = `F:0234`;
+    ctx.fillText(row1Left, marginX, marginY);
+    const r1W = ctx.measureText(row1Right).width;
+    ctx.fillText(row1Right, width - r1W - marginX, marginY);
+
+    const row2Y = marginY + fontSize + 3;
+    const row2Left = `${confidence}`;
+    const row2Right = `2030`;
+    ctx.fillText(row2Left, marginX, row2Y);
+    const r2W = ctx.measureText(row2Right).width;
+    ctx.fillText(row2Right, width - r2W - marginX, row2Y);
   }
 
   // Bottom REC indicator safely inside viewport
   const bottomY = height - marginY;
-  const recDotRadius = Math.max(3, Math.round(4 * S));
+  const recDotRadius = Math.max(3, Math.min(Math.round(4 * S), Math.floor(width * 0.02)));
 
   ctx.fillStyle = '#FF3B30';
   ctx.beginPath();
@@ -444,7 +473,7 @@ function renderCCTVTelemetry(ctx, width, height, options, S) {
 
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'middle';
-  ctx.fillText('REC', marginX + recDotRadius * 2 + Math.round(6 * S), bottomY - recDotRadius / 2);
+  ctx.fillText('REC', marginX + recDotRadius * 2 + Math.max(4, Math.round(6 * S)), bottomY - recDotRadius / 2);
 
   ctx.restore();
 }

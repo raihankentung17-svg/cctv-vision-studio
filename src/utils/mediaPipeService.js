@@ -377,21 +377,36 @@ function realPixelComputerVisionScan(canvas, width, height) {
   const hasForeground = totalFgPixels > (width * height * 0.01) && maxFgX > minFgX && maxFgY > minFgY;
 
   if (hasSkin) {
-    // Determine whether this is an isolated hand/limb or a person with clothing
-    const skinRatioOfFg = hasForeground ? totalSkinPixels / Math.max(1, totalFgPixels) : 1;
-    const fgBelowSkin = hasForeground ? (maxFgY - maxSkinY) : 0;
-    const isIsolatedHandOrLimb = skinRatioOfFg > 0.4 || fgBelowSkin < (height * 0.12);
+    // Check if there is an actual continuous dense clothing region immediately beneath maxSkinY
+    const testZoneH = Math.min(height - maxSkinY, (maxSkinY - minSkinY));
+    let denseFgBelowSkin = 0;
+    if (testZoneH > 20) {
+      for (let y = maxSkinY; y < maxSkinY + testZoneH; y += 4) {
+        for (let x = minSkinX; x < maxSkinX; x += 4) {
+          const p = (y * width + x) * 4;
+          const r = data[p], g = data[p + 1], b = data[p + 2], a = data[p + 3];
+          const diffBg = Math.abs(r - avgBgR) + Math.abs(g - avgBgG) + Math.abs(b - avgBgB);
+          if (a > 30 && diffBg > 40) {
+            denseFgBelowSkin++;
+          }
+        }
+      }
+    }
+    const sampleArea = Math.max(1, ((maxSkinX - minSkinX) / 4) * (testZoneH / 4));
+    const clothingDensity = denseFgBelowSkin / sampleArea;
+    const hasRealTorsoBelow = clothingDensity > 0.35 && (maxFgY - maxSkinY) > (height * 0.15);
+    const isIsolatedHandOrLimb = !hasRealTorsoBelow;
 
     if (isIsolatedHandOrLimb) {
       // Tightly wrap the detected hand / biometric extremity
-      const padX = Math.round((maxSkinX - minSkinX) * 0.06);
-      const padY = Math.round((maxSkinY - minSkinY) * 0.06);
+      const padX = Math.round((maxSkinX - minSkinX) * 0.05);
+      const padY = Math.round((maxSkinY - minSkinY) * 0.05);
       const sx = Math.max(0, minSkinX - padX);
       const sy = Math.max(0, minSkinY - padY);
       const sw = Math.min(width - sx, (maxSkinX - minSkinX) + padX * 2);
       const sh = Math.min(height - sy, (maxSkinY - minSkinY) + padY * 2);
 
-      // Primary Subject Box: Hand Segment
+      // Primary Subject Box: Hand Segment (Clamped strictly to hand bounds)
       boxes.push({
         id: 'sub_main',
         label: 'subject_track',
@@ -404,9 +419,9 @@ function realPixelComputerVisionScan(canvas, width, height) {
         type: 'subject'
       });
 
-      // Digits / Phalanges Box (upper 45%)
+      // Digits / Phalanges Box (upper 42%)
       const dw = Math.round(sw * 0.88);
-      const dh = Math.round(sh * 0.44);
+      const dh = Math.round(sh * 0.42);
       const dx = Math.round(sx + (sw - dw) / 2);
       const dy = Math.round(sy + sh * 0.05);
 
@@ -422,11 +437,11 @@ function realPixelComputerVisionScan(canvas, width, height) {
         type: 'head'
       });
 
-      // Palm / Metacarpal Box (lower 45%)
+      // Palm / Metacarpal Box (lower 38%, spaced to avoid badge overlap)
       const pw = Math.round(sw * 0.72);
-      const ph = Math.round(sh * 0.42);
+      const ph = Math.round(sh * 0.38);
       const px = Math.round(sx + (sw - pw) / 2);
-      const py = Math.round(sy + sh * 0.48);
+      const py = Math.round(sy + sh * 0.54);
 
       boxes.push({
         id: 'sub_palm',
@@ -444,11 +459,11 @@ function realPixelComputerVisionScan(canvas, width, height) {
       keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.12), label: 'DIGIT_03' });
       keypoints.push({ x: Math.round(sx + sw * 0.28), y: Math.round(sy + sh * 0.18), label: 'DIGIT_02' });
       keypoints.push({ x: Math.round(sx + sw * 0.72), y: Math.round(sy + sh * 0.22), label: 'DIGIT_04' });
-      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.65), label: 'PALM_CTR' });
-      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.92), label: 'CARPAL' });
+      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.68), label: 'PALM_CTR' });
+      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.90), label: 'CARPAL' });
 
     } else {
-      // Full human / torso with clothing detected below skin
+      // Full human / torso with real clothing detected below skin
       const effectiveMinX = hasForeground ? Math.min(minSkinX, minFgX) : minSkinX;
       const effectiveMaxX = hasForeground ? Math.max(maxSkinX, maxFgX) : maxSkinX;
       const effectiveMinY = minSkinY;
@@ -474,8 +489,8 @@ function realPixelComputerVisionScan(canvas, width, height) {
       });
 
       // Head / Face Box (bound tightly to skin area)
-      const hw = Math.round((maxSkinX - minSkinX) * 1.08);
-      const hh = Math.round((maxSkinY - minSkinY) * 1.08);
+      const hw = Math.round((maxSkinX - minSkinX) * 1.05);
+      const hh = Math.round((maxSkinY - minSkinY) * 1.05);
       const hx = Math.round(Math.max(0, minSkinX - (hw - (maxSkinX - minSkinX)) / 2));
       const hy = Math.round(Math.max(0, minSkinY - (hh - (maxSkinY - minSkinY)) / 2));
 
@@ -491,9 +506,9 @@ function realPixelComputerVisionScan(canvas, width, height) {
         type: 'head'
       });
 
-      // Torso Box (clamped strictly above effectiveMaxY)
+      // Torso Box (starts below head box with safe margin)
       const tw = Math.round(sw * 0.85);
-      const ty = Math.round(hy + hh * 0.9);
+      const ty = Math.round(hy + hh + 8);
       const th = Math.round(Math.max(40, Math.min(height - ty, (effectiveMaxY - ty))));
       const tx = Math.round(sx + (sw - tw) / 2);
 

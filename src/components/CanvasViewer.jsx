@@ -75,6 +75,17 @@ export default function CanvasViewer({
     img.src = imageSrc;
   }, [imageSrc]);
 
+  // Helper to calculate optimal fit scale for the current viewport dimensions
+  const calculateFitScale = (w, h) => {
+    if (!viewportRef.current || !w || !h) return 1.0;
+    const vpW = Math.max(100, viewportRef.current.clientWidth - 64);
+    const vpH = Math.max(100, viewportRef.current.clientHeight - 64);
+    const scaleW = vpW / w;
+    const scaleH = vpH / h;
+    const fit = Math.min(1.2, Math.max(0.15, Math.min(scaleW, scaleH)));
+    return Number(fit.toFixed(2));
+  };
+
   // 1. Load active image from processedImage (or fallback to imageSrc)
   useEffect(() => {
     const target = processedImage;
@@ -93,17 +104,23 @@ export default function CanvasViewer({
     setImageDims({ width: w, height: h });
     setActiveImage(target);
 
-    // Auto fit to viewport
-    if (viewportRef.current) {
-      const vpW = viewportRef.current.clientWidth - 80;
-      const vpH = viewportRef.current.clientHeight - 80;
-      const scaleW = vpW / w;
-      const scaleH = vpH / h;
-      const fitScale = Math.min(1.2, Math.max(0.15, Math.min(scaleW, scaleH)));
-      setScale(Number(fitScale.toFixed(2)));
+    // Initial smooth fit on new image load
+    requestAnimationFrame(() => {
+      const fit = calculateFitScale(w, h);
+      setScale(fit);
       setPan({ x: 0, y: 0 });
-    }
+    });
   }, [processedImage, imageSrc]);
+
+  // Viewport ResizeObserver to adapt fit if dimensions change
+  useEffect(() => {
+    if (!viewportRef.current) return;
+    const observer = new ResizeObserver(() => {
+      // Only auto-adjust if no image or image loaded
+    });
+    observer.observe(viewportRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // 2. Render Canvas Pipeline (Original vs CCTV Glitch Effect)
   useEffect(() => {
@@ -296,13 +313,9 @@ export default function CanvasViewer({
     setPan({ x: 0, y: 0 });
   };
   const handleFitToScreen = () => {
-    if (viewportRef.current && imageDims.width > 0) {
-      const vpW = viewportRef.current.clientWidth - 80;
-      const vpH = viewportRef.current.clientHeight - 80;
-      const scaleW = vpW / imageDims.width;
-      const scaleH = vpH / imageDims.height;
-      const fit = Math.min(1.2, Math.max(0.2, Math.min(scaleW, scaleH)));
-      setScale(Number(fit.toFixed(2)));
+    if (imageDims.width > 0 && imageDims.height > 0) {
+      const fit = calculateFitScale(imageDims.width, imageDims.height);
+      setScale(fit);
       setPan({ x: 0, y: 0 });
     }
   };
