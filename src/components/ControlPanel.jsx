@@ -7,9 +7,12 @@ import {
   RefreshCw,
   ShieldCheck,
   CheckCircle2,
-  X
+  X,
+  Crop,
+  Scaling
 } from 'lucide-react';
 import BoxManager from './BoxManager';
+import { ASPECT_RATIOS } from '../utils/imageProcessor';
 
 export const PALETTE_PRESETS = [
   { name: 'Acid Yellow', hex: '#FFE600' },
@@ -36,7 +39,15 @@ export default function ControlPanel({
   keypoints,
   onUpdateKeypoints,
   theme = 'dark',
-  hasImage
+  hasImage,
+  aspectRatio = 'original',
+  onChangeAspectRatio,
+  fitMode = 'contain',
+  onChangeFitMode,
+  autoTrim = false,
+  onChangeAutoTrim,
+  canvasBg = '#ffffff',
+  onChangeCanvasBg
 }) {
   const fileInputRef = useRef(null);
   const isDark = theme === 'dark';
@@ -172,7 +183,144 @@ export default function ControlPanel({
           )}
         </section>
 
-        {/* 2. Color Palette Selector */}
+        {/* 2. Canvas Framing & Aspect Ratio System */}
+        <section
+          className={`space-y-3 p-3 rounded-lg border ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-300 shadow-xs'
+          }`}
+        >
+          <div
+            className={`flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
+              isDark ? 'text-slate-200' : 'text-slate-900'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <Scaling className="w-4 h-4 text-cyan-600" />
+              <span>Canvas Size & Ratio</span>
+            </div>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase font-mono ${
+                isDark ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-cyan-100 text-cyan-900 border border-cyan-300'
+              }`}
+            >
+              {aspectRatio.toUpperCase()}
+            </span>
+          </div>
+
+          {/* Aspect Ratio Presets Grid */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {ASPECT_RATIOS.map((preset) => {
+              const isSelected = aspectRatio === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => onChangeAspectRatio && onChangeAspectRatio(preset.id)}
+                  className={`min-h-[44px] flex flex-col items-center justify-center p-1.5 rounded-md border text-center transition-all cursor-pointer ${
+                    isSelected
+                      ? isDark
+                        ? 'border-cyan-400 bg-cyan-950/70 text-cyan-200 font-bold shadow-xs'
+                        : 'border-cyan-500 bg-cyan-100 text-cyan-950 font-bold shadow-xs'
+                      : isDark
+                      ? 'border-slate-800 bg-slate-900/40 text-slate-300 hover:text-white hover:border-slate-700'
+                      : 'border-slate-300 bg-white text-slate-700 hover:text-slate-950 hover:border-slate-400'
+                  }`}
+                  title={`${preset.name} (${preset.label})`}
+                >
+                  <span className="text-[11px] font-bold leading-tight">
+                    {preset.id === 'original' ? 'Original' : preset.id}
+                  </span>
+                  <span className="text-[9px] opacity-75 truncate max-w-full leading-none mt-0.5">
+                    {preset.name.replace(/^[0-9:]+\s*/, '')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Framing Fit Mode (Shown when an explicit ratio is selected) */}
+          {aspectRatio !== 'original' && (
+            <div className="flex items-center justify-between pt-1">
+              <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Framing Mode:
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onChangeFitMode && onChangeFitMode('contain')}
+                  className={`min-h-[36px] px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                    fitMode === 'contain'
+                      ? 'bg-cyan-500 text-slate-950 shadow-xs'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-300 hover:text-white'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}
+                  title="Fit (Contain): Tampilkan seluruh gambar tanpa terpotong"
+                >
+                  Fit
+                </button>
+                <button
+                  onClick={() => onChangeFitMode && onChangeFitMode('cover')}
+                  className={`min-h-[36px] px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                    fitMode === 'cover'
+                      ? 'bg-cyan-500 text-slate-950 shadow-xs'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-300 hover:text-white'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}
+                  title="Fill (Cover): Penuhi seluruh frame canvas"
+                >
+                  Fill
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Auto-Trim Whitespace Margin */}
+          <div className="pt-2 border-t border-slate-700/40 space-y-1">
+            <label className={`flex items-center justify-between cursor-pointer py-0.5 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <Crop className="w-3.5 h-3.5 text-cyan-600" />
+                <span>Auto-Trim Whitespace</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoTrim}
+                onChange={(e) => onChangeAutoTrim && onChangeAutoTrim(e.target.checked)}
+                className="accent-cyan-500 w-4 h-4 cursor-pointer rounded"
+              />
+            </label>
+            <p className={`text-[10px] leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Pangkas ruang kosong putih/transparan berlebih di sekitar objek agar komposisi canvas presisi.
+            </p>
+          </div>
+
+          {/* Letterbox Background Selector (For Fit Mode) */}
+          {aspectRatio !== 'original' && fitMode === 'contain' && (
+            <div className="flex items-center justify-between pt-1 border-t border-slate-700/40">
+              <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Letterbox Bg:
+              </span>
+              <div className="flex items-center gap-2">
+                {[
+                  { name: 'White', hex: '#ffffff' },
+                  { name: 'Dark CCTV', hex: '#06080c' },
+                  { name: 'Slate Gray', hex: '#1e293b' }
+                ].map((bg) => (
+                  <button
+                    key={bg.hex}
+                    onClick={() => onChangeCanvasBg && onChangeCanvasBg(bg.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
+                      canvasBg === bg.hex ? 'ring-2 ring-cyan-500 scale-110' : 'opacity-70 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: bg.hex }}
+                    title={bg.name}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 3. Color Palette Selector */}
         <section className="space-y-2.5">
           <div
             className={`flex items-center justify-between font-bold text-xs uppercase tracking-wider ${

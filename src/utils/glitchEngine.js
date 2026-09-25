@@ -1,8 +1,8 @@
 /**
  * CCTV Vision & Memory Corruption Processing Engine
  * 
- * Recreates the exact machine-vision tracking + stepped memory corruption
- * visual aesthetics as demonstrated in the reference video and prompt.
+ * Recreates the machine-vision tracking + stepped memory corruption
+ * aesthetics with resolution-aware dynamic scaling and collision-safe telemetry.
  */
 
 // Preset Hex Diagnostic Code snippets extracted directly from the video frames
@@ -16,9 +16,6 @@ const DIAGNOSTIC_CODES = [
   ["000001000", "010111010", "110010001", "101001110"]
 ];
 
-/**
- * Pseudo-random generator with fixed seed for reproducible aesthetics
- */
 function createSeededRandom(seed = 12345) {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
@@ -28,9 +25,6 @@ function createSeededRandom(seed = 12345) {
   };
 }
 
-/**
- * Converts Hex color string to RGB object
- */
 export function hexToRgb(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) {
@@ -45,7 +39,7 @@ export function hexToRgb(hex) {
 }
 
 /**
- * Main Render Pipeline
+ * Main Render Pipeline with dynamic resolution scaling
  */
 export function renderCCTVVisionEffect(canvas, image, options) {
   if (!canvas || !image) return;
@@ -59,86 +53,92 @@ export function renderCCTVVisionEffect(canvas, image, options) {
     canvas.height = height;
   }
 
-  // 1. Render Base Image (Crisp, preserving 100% natural texture and lighting)
+  // Calculate resolution-adaptive scale factor S
+  const S = Math.max(0.75, Math.min(3.5, Math.sqrt((width * height) / (850 * 850))));
+
+  // 1. Render Base Image
   ctx.clearRect(0, 0, width, height);
   ctx.drawImage(image, 0, 0, width, height);
 
-  // Get raw pixel data for contrast / brightness analysis
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
 
   // 2. Perform Contrast / Bright / Dark / Combined Mask Generation
-  const corruptionMask = generateCorruptionMask(data, width, height, options);
+  const corruptionMask = generateCorruptionMask(data, width, height, options, S);
 
   // 3. Render Machine Vision Bounding Boxes & Reticles (FIRST LAYER)
   if (options.showBoxes && options.boxes && options.boxes.length > 0) {
-    renderBoundingBoxes(ctx, options.boxes, options, width, height);
+    renderBoundingBoxes(ctx, options.boxes, options, width, height, S);
   }
 
   // 4. Render Tracking Crosses (+)
   if (options.showKeypoints && options.keypoints && options.keypoints.length > 0) {
-    renderTrackingCrosses(ctx, options.keypoints, options);
+    renderTrackingCrosses(ctx, options.keypoints, options, S);
   }
 
-  // 5. Render Memory Corruption Glitch Blocks (INTERLOCKING LAYER: partially obscures boxes)
+  // 5. Render Memory Corruption Glitch Blocks (INTERLOCKING LAYER)
   if (options.corruptionEnabled !== false) {
     renderCorruptionBlocks(ctx, corruptionMask, width, height, options);
   }
 
-  // 6. Render Diagnostic Hex Dump Code Inside/Around Corrupted Blocks
+  // 6. Render Diagnostic Hex Dump Code Inside Corrupted Blocks
   if (options.showDiagnosticCode && options.corruptionEnabled !== false) {
-    renderDiagnosticHexDumps(ctx, corruptionMask, width, height, options);
+    renderDiagnosticHexDumps(ctx, corruptionMask, width, height, options, S);
   }
 
   // 7. Render CCTV Telemetry & Header/Footer System Overlays
   if (options.showTelemetry) {
-    renderCCTVTelemetry(ctx, width, height, options);
+    renderCCTVTelemetry(ctx, width, height, options, S);
   }
 }
 
 /**
  * Analyzes pixels to detect dark, bright, contrast edges, or combined conditions
  */
-function generateCorruptionMask(data, width, height, options) {
+function generateCorruptionMask(data, width, height, options, S) {
   const {
-    detectionMode = 'combined', // 'dark' | 'bright' | 'contrast' | 'combined'
-    darkThreshold = 75,         // 0 - 255: pixels with luminance < darkThreshold
-    brightThreshold = 185,      // 0 - 255: pixels with luminance > brightThreshold
-    contrastThreshold = 45,     // 0 - 255: gradient edge magnitude
-    blockSize = 16,             // size of stepped pixelated chunks
-    density = 55,               // 0 - 100 density factor
-    confineToBoxes = true,      // confine to tracked subject areas
+    detectionMode = 'combined',
+    darkThreshold = 75,
+    brightThreshold = 185,
+    contrastThreshold = 45,
+    blockSize = 16,
+    density = 55,
+    confineToBoxes = true,
     boxes = [],
     seed = 42
   } = options;
 
+  // Adapt block size so high-res images maintain chunky aesthetic
+  const effectiveBlockSize = Math.max(8, Math.round(blockSize * Math.min(2.0, S)));
+
   const rng = createSeededRandom(seed);
-  const cols = Math.ceil(width / blockSize);
-  const rows = Math.ceil(height / blockSize);
+  const cols = Math.ceil(width / effectiveBlockSize);
+  const rows = Math.ceil(height / effectiveBlockSize);
   const cellScore = new Float32Array(cols * rows);
   const cellActive = new Uint8Array(cols * rows);
 
-  // Pre-calculate luminance buffer for fast Sobel operator
+  // Fast luminance buffer
   const luma = new Uint8Array(width * height);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    // ITU-R BT.709 luminance
     luma[p] = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) | 0;
   }
 
-  // Bounding box inclusion mask (with slight outline expansion)
+  // Strict bounding box inclusion mask
   let boxMask = null;
   if (confineToBoxes && boxes && boxes.length > 0) {
     boxMask = new Uint8Array(cols * rows);
-    const expand = 1.15; // 15% expansion to allow fragments to interrupt outline
+    const expand = 1.08; // Small 8% outline bleed
     for (const b of boxes) {
-      const cx = b.x + b.width / 2;
-      const cy = b.y + b.height / 2;
-      const ew = (b.width * expand);
-      const eh = (b.height * expand);
-      const minCol = Math.max(0, Math.floor((cx - ew / 2) / blockSize));
-      const maxCol = Math.min(cols - 1, Math.ceil((cx + ew / 2) / blockSize));
-      const minRow = Math.max(0, Math.floor((cy - eh / 2) / blockSize));
-      const maxRow = Math.min(rows - 1, Math.ceil((cy + eh / 2) / blockSize));
+      // Clamp coordinates strictly within canvas bounds
+      const cx = Math.max(0, Math.min(width, b.x + b.width / 2));
+      const cy = Math.max(0, Math.min(height, b.y + b.height / 2));
+      const ew = Math.min(width, b.width * expand);
+      const eh = Math.min(height, b.height * expand);
+
+      const minCol = Math.max(0, Math.floor((cx - ew / 2) / effectiveBlockSize));
+      const maxCol = Math.min(cols - 1, Math.ceil((cx + ew / 2) / effectiveBlockSize));
+      const minRow = Math.max(0, Math.floor((cy - eh / 2) / effectiveBlockSize));
+      const maxRow = Math.min(rows - 1, Math.ceil((cy + eh / 2) / effectiveBlockSize));
 
       for (let r = minRow; r <= maxRow; r++) {
         for (let c = minCol; c <= maxCol; c++) {
@@ -151,25 +151,21 @@ function generateCorruptionMask(data, width, height, options) {
   // Scan pixels and accumulate qualification score per block
   for (let y = 1; y < height - 1; y += 2) {
     const rowOffset = y * width;
-    const cellY = Math.floor(y / blockSize);
+    const cellY = Math.floor(y / effectiveBlockSize);
 
     for (let x = 1; x < width - 1; x += 2) {
-      const cellX = Math.floor(x / blockSize);
+      const cellX = Math.floor(x / effectiveBlockSize);
       const cellIdx = cellY * cols + cellX;
 
-      // Skip if confined to boxes and outside
       if (boxMask && !boxMask[cellIdx]) continue;
 
       const p = rowOffset + x;
       const lum = luma[p];
 
       let isQualified = false;
-
-      // 1. Luminance Tests
       const isDark = lum < darkThreshold;
       const isBright = lum > brightThreshold;
 
-      // 2. Sobel Edge / Contrast Gradient
       let isHighContrast = false;
       if (detectionMode === 'contrast' || detectionMode === 'combined') {
         const gx = (-luma[p - width - 1] + luma[p - width + 1]) +
@@ -177,11 +173,10 @@ function generateCorruptionMask(data, width, height, options) {
                    (-luma[p + width - 1] + luma[p + width + 1]);
         const gy = (-luma[p - width - 1] - 2 * luma[p - width] - luma[p - width + 1]) +
                    (luma[p + width - 1]  + 2 * luma[p + width]  + luma[p + width + 1]);
-        const mag = Math.abs(gx) + Math.abs(gy); // Fast approximation
+        const mag = Math.abs(gx) + Math.abs(gy);
         isHighContrast = mag > (contrastThreshold * 4);
       }
 
-      // 3. Selection Modes
       if (detectionMode === 'dark') {
         isQualified = isDark;
       } else if (detectionMode === 'bright') {
@@ -189,7 +184,6 @@ function generateCorruptionMask(data, width, height, options) {
       } else if (detectionMode === 'contrast') {
         isQualified = isHighContrast;
       } else if (detectionMode === 'combined') {
-        // Combined mode: highlights or shadows intersecting sharp edges
         isQualified = (isDark || isBright) && (isHighContrast || rng() < 0.25);
       }
 
@@ -199,8 +193,7 @@ function generateCorruptionMask(data, width, height, options) {
     }
   }
 
-  // Normalize cell scores and apply density threshold
-  const sampleCountPerCell = (blockSize * blockSize) / 4;
+  const sampleCountPerCell = (effectiveBlockSize * effectiveBlockSize) / 4;
   const thresholdRatio = Math.max(0.08, 0.6 - (density / 100) * 0.45);
 
   for (let idx = 0; idx < cellScore.length; idx++) {
@@ -210,14 +203,13 @@ function generateCorruptionMask(data, width, height, options) {
     }
   }
 
-  // Morphological Stepped Clustering: Create chunky connected 8-bit staircase blocks
+  // Morphological Stepped Clustering (8-bit geometric staircase)
   const clustered = new Uint8Array(cols * rows);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
       if (cellActive[idx]) {
         clustered[idx] = 1;
-        // Occasional stepped expansion right / down for authentic glitch geometry
         if (rng() < 0.35 && c + 1 < cols) clustered[idx + 1] = 1;
         if (rng() < 0.25 && r + 1 < rows) clustered[idx + cols] = 1;
       }
@@ -227,7 +219,7 @@ function generateCorruptionMask(data, width, height, options) {
   return {
     cols,
     rows,
-    blockSize,
+    blockSize: effectiveBlockSize,
     cells: clustered,
     scores: cellScore
   };
@@ -245,7 +237,6 @@ function renderCorruptionBlocks(ctx, mask, width, height, options) {
   ctx.save();
   ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
 
-  // Group contiguous horizontal runs into rectangular strips for clean rendering
   for (let r = 0; r < rows; r++) {
     let runStart = -1;
     for (let c = 0; c <= cols; c++) {
@@ -267,36 +258,37 @@ function renderCorruptionBlocks(ctx, mask, width, height, options) {
 }
 
 /**
- * Injects realistic diagnostic crash codes into large corrupted blocks
+ * Injects realistic diagnostic crash codes with dynamic scaling
  */
-function renderDiagnosticHexDumps(ctx, mask, width, height, options) {
+function renderDiagnosticHexDumps(ctx, mask, width, height, options, S) {
   const { cols, rows, blockSize, cells } = mask;
   const seed = (options.seed || 100) + 77;
   const rng = createSeededRandom(seed);
 
+  const fontSize = Math.max(8, Math.round(9 * S));
+  const lineHeight = Math.round(11 * S);
+
   ctx.save();
-  ctx.font = 'bold 9px "JetBrains Mono", "SF Mono", monospace';
+  ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
   ctx.fillStyle = '#FFFFFF';
   ctx.textBaseline = 'top';
 
-  // Find candidate regions with at least 3x2 connected blocks
   for (let r = 1; r < rows - 2; r += 2) {
     for (let c = 1; c < cols - 3; c += 2) {
       const idx = r * cols + c;
       if (cells[idx] && cells[idx + 1] && cells[idx + cols] && cells[idx + cols + 1]) {
-        // Only place code in ~15-25% of large blocks to avoid clutter
         if (rng() < 0.22) {
           const codeSnippet = DIAGNOSTIC_CODES[Math.floor(rng() * DIAGNOSTIC_CODES.length)];
-          const posX = c * blockSize + 3;
-          let posY = r * blockSize + 3;
+          const posX = c * blockSize + Math.round(3 * S);
+          let posY = r * blockSize + Math.round(3 * S);
 
           for (const line of codeSnippet) {
-            if (posY + 10 < height && posX + 80 < width) {
+            if (posY + lineHeight < height && posX + 80 * S < width) {
               ctx.fillText(line, posX, posY);
-              posY += 10;
+              posY += lineHeight;
             }
           }
-          c += 3; // jump ahead to prevent overlapping text
+          c += 3;
         }
       }
     }
@@ -306,26 +298,34 @@ function renderDiagnosticHexDumps(ctx, mask, width, height, options) {
 }
 
 /**
- * Renders Machine-Vision Bounding Boxes with technical labels & brackets
+ * Renders Machine-Vision Bounding Boxes strictly clamped within canvas
  */
-function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight) {
+function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight, S) {
   const themeColor = options.themeColor || '#FFE600';
-  const strokeWidth = options.boxStrokeWidth || 1.25;
+  const strokeWidth = Math.max(1.25, (options.boxStrokeWidth || 1.25) * S);
+  const fontSize = Math.max(10, Math.round(11 * S));
+  const badgeH = Math.round(16 * S);
 
   ctx.save();
   ctx.lineWidth = strokeWidth;
   ctx.strokeStyle = themeColor;
   ctx.fillStyle = themeColor;
 
-  for (const box of boxes) {
-    const { x, y, width, height, label, subLabel, conf, frame } = box;
+  for (const rawBox of boxes) {
+    // Strictly clamp box within canvas boundaries
+    const x = Math.max(0, Math.min(canvasWidth - 10, rawBox.x));
+    const y = Math.max(0, Math.min(canvasHeight - 10, rawBox.y));
+    const width = Math.max(10, Math.min(canvasWidth - x, rawBox.width));
+    const height = Math.max(10, Math.min(canvasHeight - y, rawBox.height));
 
-    // 1. Draw thin crisp box outline
+    const { label, subLabel, conf } = rawBox;
+
+    // 1. Box outline
     ctx.strokeRect(x, y, width, height);
 
-    // 2. Draw Corner Tick Brackets (Machine Vision Reticle)
+    // 2. Corner Reticles
     if (options.cornerTicks !== false) {
-      const tick = Math.min(10, Math.min(width, height) * 0.25);
+      const tick = Math.min(Math.round(10 * S), Math.min(width, height) * 0.25);
       ctx.beginPath();
       // Top-Left
       ctx.moveTo(x - 2, y + tick);
@@ -346,63 +346,57 @@ function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight) {
       ctx.stroke();
     }
 
-    // 3. Draw Small Technical Label
+    // 3. Technical Label Badge
     const displayConf = conf !== undefined ? conf : '0.98';
-    const displayFrame = frame !== undefined ? frame : options.telemetry?.frameNumber || '0234';
     const mainText = label ? `[${label}]` : '[subject_track]';
     const subText = subLabel ? ` ${subLabel}` : '';
-    const confText = ` conf: ${displayConf}`;
-    const fullTag = `${mainText}${subText}${confText}`;
+    const fullTag = `${mainText}${subText} conf: ${displayConf}`;
 
-    ctx.font = '500 11px "JetBrains Mono", "SF Mono", monospace';
+    ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
     ctx.textBaseline = 'bottom';
     
-    // Slight background shield for legibility (optional)
     const textWidth = ctx.measureText(fullTag).width;
-    ctx.fillStyle = 'rgba(7, 9, 14, 0.7)';
-    ctx.fillRect(x, Math.max(0, y - 16), textWidth + 6, 16);
+    const badgeY = Math.max(0, y - badgeH);
+
+    ctx.fillStyle = 'rgba(7, 9, 14, 0.85)';
+    ctx.fillRect(x, badgeY, textWidth + Math.round(8 * S), badgeH);
 
     ctx.fillStyle = themeColor;
-    ctx.fillText(fullTag, x + 3, y - 3);
+    ctx.fillText(fullTag, x + Math.round(4 * S), y - Math.round(3 * S));
   }
 
   ctx.restore();
 }
 
 /**
- * Renders Red Tracking Crosses (+) at key facial and joint coordinates
+ * Renders Red Tracking Crosses (+) with dynamic scaling
  */
-function renderTrackingCrosses(ctx, keypoints, options) {
+function renderTrackingCrosses(ctx, keypoints, options, S) {
   const crossColor = options.crossColor || '#FF3333';
-  const size = options.crossSize || 5;
+  const size = Math.max(4, Math.round(5 * S));
+  const strokeW = Math.max(1.5, Math.round(1.5 * S));
 
   ctx.save();
   ctx.strokeStyle = crossColor;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = strokeW;
 
   for (const kp of keypoints) {
-    const { x, y, label } = kp;
+    const { x, y } = kp;
     ctx.beginPath();
     ctx.moveTo(x - size, y);
     ctx.lineTo(x + size, y);
     ctx.moveTo(x, y - size);
     ctx.lineTo(x, y + size);
     ctx.stroke();
-
-    if (label && options.showKeypointLabels) {
-      ctx.font = '9px "JetBrains Mono", monospace';
-      ctx.fillStyle = crossColor;
-      ctx.fillText(label, x + size + 2, y + 3);
-    }
   }
 
   ctx.restore();
 }
 
 /**
- * Renders Top & Bottom CCTV Camera Telemetry
+ * Renders Top & Bottom CCTV Telemetry safely positioned without collisions
  */
-function renderCCTVTelemetry(ctx, width, height, options) {
+function renderCCTVTelemetry(ctx, width, height, options, S) {
   const themeColor = options.themeColor || '#FFE600';
   const {
     cctvTag = 'CCTV_04',
@@ -412,32 +406,45 @@ function renderCCTVTelemetry(ctx, width, height, options) {
     watermark = 'CREATED BY VISION_STUDIO'
   } = options.telemetry || {};
 
+  const fontSize = Math.max(10, Math.round(11 * S));
+  const marginX = Math.round(16 * S);
+  const marginY = Math.round(16 * S);
+
   ctx.save();
-  ctx.font = '500 11px "JetBrains Mono", monospace';
+  ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'top';
 
-  // Top Left: CCTV Tag & Subject Info
-  ctx.fillText(`[${cctvTag}] ${subjectId} ${confidence}`, 16, 16);
+  // Left Tag: [CCTV_04] ID: 001A_person CONF: 0.98
+  const leftTag = `[${cctvTag}] ${subjectId} ${confidence}`;
+  ctx.fillText(leftTag, marginX, marginY);
 
-  // Top Center: Watermark / Creator Tag
-  const wmWidth = ctx.measureText(watermark).width;
-  ctx.fillText(watermark, (width - wmWidth) / 2, 16);
-
-  // Top Right: Year & Frame Count
+  // Right Tag: FRAME: 0234  2030
   const rightTag = `${frameNumber}  2030`;
   const rightWidth = ctx.measureText(rightTag).width;
-  ctx.fillText(rightTag, width - rightWidth - 16, 16);
+  ctx.fillText(rightTag, Math.max(width - rightWidth - marginX, marginX), marginY);
 
-  // Bottom Center REC indicator
+  // Center Watermark only if there is sufficient width
+  const leftWidth = ctx.measureText(leftTag).width;
+  const wmWidth = ctx.measureText(watermark).width;
+  const availableSpace = width - leftWidth - rightWidth - marginX * 4;
+
+  if (availableSpace > wmWidth + 20) {
+    ctx.fillText(watermark, (width - wmWidth) / 2, marginY);
+  }
+
+  // Bottom REC indicator safely inside viewport
+  const bottomY = height - marginY;
+  const recDotRadius = Math.max(3, Math.round(4 * S));
+
   ctx.fillStyle = '#FF3B30';
   ctx.beginPath();
-  ctx.arc(22, height - 20, 4, 0, Math.PI * 2);
+  ctx.arc(marginX + recDotRadius, bottomY - recDotRadius / 2, recDotRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'middle';
-  ctx.fillText('REC', 32, height - 20);
+  ctx.fillText('REC', marginX + recDotRadius * 2 + Math.round(6 * S), bottomY - recDotRadius / 2);
 
   ctx.restore();
 }

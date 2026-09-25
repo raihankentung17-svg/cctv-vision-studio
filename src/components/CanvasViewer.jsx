@@ -10,19 +10,29 @@ import {
   Eye,
   Grid,
   Upload,
-  Camera
+  Camera,
+  Crop,
+  Scaling
 } from 'lucide-react';
 import { renderCCTVVisionEffect } from '../utils/glitchEngine';
+import { ASPECT_RATIOS } from '../utils/imageProcessor';
 
 export default function CanvasViewer({
   imageSrc,
+  processedImage,
   config,
   boxes,
   keypoints,
   onAddKeypoint,
   onUploadImage,
   canvasRef,
-  theme = 'dark'
+  theme = 'dark',
+  aspectRatio = 'original',
+  onChangeAspectRatio,
+  fitMode = 'contain',
+  onChangeFitMode,
+  autoTrim = false,
+  onChangeAutoTrim
 }) {
   const containerRef = useRef(null);
   const viewportRef = useRef(null);
@@ -50,33 +60,50 @@ export default function CanvasViewer({
   const [activeImage, setActiveImage] = useState(null);
   const [cursorInfo, setCursorInfo] = useState({ x: 0, y: 0, visible: false });
 
-  // 1. Load image and auto-fit on initial load
+  // Cache raw image element for instantaneous Compare view
+  const rawImageRef = useRef(null);
   useEffect(() => {
     if (!imageSrc) {
-      setActiveImage(null);
-      setImageDims({ width: 0, height: 0 });
+      rawImageRef.current = null;
       return;
     }
-
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      setImageDims({ width: img.naturalWidth, height: img.naturalHeight });
-      setActiveImage(img);
-
-      // Auto fit to viewport
-      if (viewportRef.current) {
-        const vpW = viewportRef.current.clientWidth - 80;
-        const vpH = viewportRef.current.clientHeight - 80;
-        const scaleW = vpW / img.naturalWidth;
-        const scaleH = vpH / img.naturalHeight;
-        const fitScale = Math.min(1.2, Math.max(0.2, Math.min(scaleW, scaleH)));
-        setScale(Number(fitScale.toFixed(2)));
-        setPan({ x: 0, y: 0 });
-      }
+      rawImageRef.current = img;
     };
     img.src = imageSrc;
   }, [imageSrc]);
+
+  // 1. Load active image from processedImage (or fallback to imageSrc)
+  useEffect(() => {
+    const target = processedImage;
+    if (!target) {
+      if (!imageSrc) {
+        setActiveImage(null);
+        setImageDims({ width: 0, height: 0 });
+      }
+      return;
+    }
+
+    const w = target.width || target.naturalWidth || 0;
+    const h = target.height || target.naturalHeight || 0;
+    if (w === 0 || h === 0) return;
+
+    setImageDims({ width: w, height: h });
+    setActiveImage(target);
+
+    // Auto fit to viewport
+    if (viewportRef.current) {
+      const vpW = viewportRef.current.clientWidth - 80;
+      const vpH = viewportRef.current.clientHeight - 80;
+      const scaleW = vpW / w;
+      const scaleH = vpH / h;
+      const fitScale = Math.min(1.2, Math.max(0.15, Math.min(scaleW, scaleH)));
+      setScale(Number(fitScale.toFixed(2)));
+      setPan({ x: 0, y: 0 });
+    }
+  }, [processedImage, imageSrc]);
 
   // 2. Render Canvas Pipeline (Original vs CCTV Glitch Effect)
   useEffect(() => {
@@ -85,8 +112,8 @@ export default function CanvasViewer({
     const startTime = performance.now();
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    const width = activeImage.naturalWidth || activeImage.width;
-    const height = activeImage.naturalHeight || activeImage.height;
+    const width = activeImage.width || activeImage.naturalWidth;
+    const height = activeImage.height || activeImage.naturalHeight;
 
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
@@ -96,7 +123,11 @@ export default function CanvasViewer({
     if (isHoldingOriginal) {
       // Direct raw render without effects for instant A/B comparison
       ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(activeImage, 0, 0, width, height);
+      if (rawImageRef.current) {
+        ctx.drawImage(rawImageRef.current, 0, 0, width, height);
+      } else {
+        ctx.drawImage(activeImage, 0, 0, width, height);
+      }
       ctx.font = '700 13px "JetBrains Mono", monospace';
       ctx.fillStyle = '#FFE600';
       ctx.fillText('[ORIGINAL RAW BUFFER - NO EFFECTS]', 20, 24);
@@ -338,6 +369,47 @@ export default function CanvasViewer({
             >
               <Eye className="w-4 h-4" />
               <span className="hidden sm:inline">Compare</span>
+            </button>
+
+            <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+
+            {/* Quick Aspect Ratio Selector */}
+            <div className="flex items-center gap-1">
+              <span className={`text-[10px] font-bold uppercase hidden md:inline px-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Ratio:
+              </span>
+              <select
+                value={aspectRatio}
+                onChange={(e) => onChangeAspectRatio && onChangeAspectRatio(e.target.value)}
+                className={`min-h-[44px] px-2 py-1 rounded text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-cyan-400 hover:border-cyan-500'
+                    : 'bg-slate-50 border-slate-300 text-cyan-800 hover:border-cyan-500'
+                }`}
+                title="Pilih Aspek Rasio Canvas"
+              >
+                {ASPECT_RATIOS.map((r) => (
+                  <option key={r.id} value={r.id} className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
+                    {r.id.toUpperCase()} ({r.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quick Auto-Trim Whitespace Button */}
+            <button
+              onClick={() => onChangeAutoTrim && onChangeAutoTrim(!autoTrim)}
+              className={`min-h-[44px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                autoTrim
+                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                  : isDark
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Auto-Trim Whitespace: Pangkas margin putih kosong di sekitar subjek"
+            >
+              <Crop className="w-4 h-4" />
+              <span className="hidden lg:inline text-xs">{autoTrim ? 'Trim ON' : 'Trim OFF'}</span>
             </button>
           </div>
 

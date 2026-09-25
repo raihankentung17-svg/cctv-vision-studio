@@ -6,6 +6,7 @@ import AlphaPromptModal from './components/AlphaPromptModal';
 import PresetsModal from './components/PresetsModal';
 import { STYLE_PRESETS } from './utils/sampleImages';
 import { scanImage, initMediaPipe, getSensorStatus } from './utils/mediaPipeService';
+import { prepareOptimizedImage } from './utils/imageProcessor';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -36,8 +37,13 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [scanNotification]);
 
-  // Default clean empty canvas state
+  // Image Source & Canvas Sizing States
   const [imageSrc, setImageSrc] = useState(null);
+  const [aspectRatio, setAspectRatio] = useState('original');
+  const [fitMode, setFitMode] = useState('contain');
+  const [autoTrim, setAutoTrim] = useState(false);
+  const [canvasBg, setCanvasBg] = useState('#ffffff');
+  const [processedCanvas, setProcessedCanvas] = useState(null);
 
   // Default style parameters (Tokyo Lavender)
   const defaultPreset = STYLE_PRESETS[0];
@@ -71,46 +77,80 @@ export default function App() {
     });
   }, []);
 
-  // When custom image is uploaded, auto-run scan
-  const handleUploadImage = (dataUrl) => {
-    setImageSrc(dataUrl);
-    setScanNotification(null);
+  // Process image sizing & auto-scan whenever imageSrc or framing options change
+  useEffect(() => {
+    if (!imageSrc) {
+      setProcessedCanvas(null);
+      setBoxes([]);
+      setKeypoints([]);
+      return;
+    }
 
+    let isCancelled = false;
     const img = new Image();
     img.crossOrigin = 'anonymous';
+
     img.onload = async () => {
+      if (isCancelled) return;
+
+      // 1. Prepare target canvas according to aspect ratio, fitMode, and autoTrim
+      const optimizedCanvas = prepareOptimizedImage(img, {
+        aspectRatioId: aspectRatio,
+        fitMode,
+        autoTrim,
+        backgroundColor: canvasBg
+      });
+
+      if (isCancelled) return;
+      setProcessedCanvas(optimizedCanvas);
+
+      // 2. Perform AI scan on the newly formatted canvas
       setIsScanning(true);
       try {
-        const result = await scanImage(img);
+        const result = await scanImage(optimizedCanvas);
+        if (isCancelled) return;
         setBoxes(result.boxes || []);
         setKeypoints(result.keypoints || []);
         setSensorStatus(getSensorStatus());
 
         setScanNotification({
           type: 'success',
-          title: 'Auto-Scan Selesai',
+          title: 'Pemindaian Selesai',
           message: `${result.boxes.length} bounding box & ${result.keypoints.length} keypoint terdeteksi via ${result.engine}`
         });
       } catch (err) {
-        console.error('Scan error:', err);
-        setScanNotification({
-          type: 'info',
-          title: 'Sensor Notification',
-          message: 'Gambar dimuat. Gunakan tombol Scan MediaPipe untuk deteksi anatomi.'
-        });
+        if (!isCancelled) {
+          console.warn('Scan error:', err);
+        }
       } finally {
-        setIsScanning(false);
+        if (!isCancelled) {
+          setIsScanning(false);
+        }
       }
     };
+
     img.onerror = () => {
-      setIsScanning(false);
-      setScanNotification({
-        type: 'error',
-        title: 'Gagal Memuat Gambar',
-        message: 'File gambar tidak dapat dibaca atau rusak.'
-      });
+      if (!isCancelled) {
+        setIsScanning(false);
+        setScanNotification({
+          type: 'error',
+          title: 'Gagal Memuat Gambar',
+          message: 'File gambar tidak dapat dibaca atau rusak.'
+        });
+      }
     };
-    img.src = dataUrl;
+
+    img.src = imageSrc;
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [imageSrc, aspectRatio, fitMode, autoTrim, canvasBg]);
+
+  // When custom image is uploaded
+  const handleUploadImage = (dataUrl) => {
+    setImageSrc(dataUrl);
+    setScanNotification(null);
   };
 
   // Select style preset
@@ -135,46 +175,39 @@ export default function App() {
     });
   };
 
-  // Trigger manual MediaPipe scan on active image
+  // Trigger manual MediaPipe scan on active processed canvas
   const handleRunMediaPipeScan = async () => {
-    if (!imageSrc) return;
+    if (!processedCanvas) return;
     setIsScanning(true);
     setScanNotification(null);
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = async () => {
-      try {
-        const result = await scanImage(img);
-        setBoxes(result.boxes || []);
-        setKeypoints(result.keypoints || []);
-        setSensorStatus(getSensorStatus());
+    try {
+      const result = await scanImage(processedCanvas);
+      setBoxes(result.boxes || []);
+      setKeypoints(result.keypoints || []);
+      setSensorStatus(getSensorStatus());
 
-        setScanNotification({
-          type: 'success',
-          title: 'Scan Sukses',
-          message: `${result.boxes.length} box & ${result.keypoints.length} tracking point terdeteksi via ${result.engine}`
-        });
-      } catch (err) {
-        console.warn('Manual scan error:', err);
-        setScanNotification({
-          type: 'error',
-          title: 'Sensor Fallback',
-          message: 'Deteksi dialihkan ke sistem Computer Vision Saliency.'
-        });
-      } finally {
-        setIsScanning(false);
-      }
-    };
-    img.onerror = () => {
+      setScanNotification({
+        type: 'success',
+        title: 'Scan Sukses',
+        message: `${result.boxes.length} box & ${result.keypoints.length} tracking point terdeteksi via ${result.engine}`
+      });
+    } catch (err) {
+      console.warn('Manual scan error:', err);
+      setScanNotification({
+        type: 'error',
+        title: 'Sensor Fallback',
+        message: 'Deteksi dialihkan ke sistem Computer Vision Saliency.'
+      });
+    } finally {
       setIsScanning(false);
-    };
-    img.src = imageSrc;
+    }
   };
 
   // Clear / Empty Canvas completely
   const handleClearCanvas = () => {
     setImageSrc(null);
+    setProcessedCanvas(null);
     setBoxes([]);
     setKeypoints([]);
     setScanNotification(null);
@@ -236,11 +269,20 @@ export default function App() {
           onUpdateKeypoints={setKeypoints}
           theme={theme}
           hasImage={Boolean(imageSrc)}
+          aspectRatio={aspectRatio}
+          onChangeAspectRatio={setAspectRatio}
+          fitMode={fitMode}
+          onChangeFitMode={setFitMode}
+          autoTrim={autoTrim}
+          onChangeAutoTrim={setAutoTrim}
+          canvasBg={canvasBg}
+          onChangeCanvasBg={setCanvasBg}
         />
 
         {/* Center Interactive Canvas Viewport */}
         <CanvasViewer
           imageSrc={imageSrc}
+          processedImage={processedCanvas}
           config={config}
           boxes={boxes}
           keypoints={keypoints}
@@ -248,6 +290,12 @@ export default function App() {
           onUploadImage={handleUploadImage}
           canvasRef={canvasRef}
           theme={theme}
+          aspectRatio={aspectRatio}
+          onChangeAspectRatio={setAspectRatio}
+          fitMode={fitMode}
+          onChangeFitMode={setFitMode}
+          autoTrim={autoTrim}
+          onChangeAutoTrim={setAutoTrim}
         />
       </div>
 

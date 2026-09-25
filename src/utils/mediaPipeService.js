@@ -279,9 +279,9 @@ function parseMediaPipeResults(faceResult, poseResult, width, height) {
 }
 
 /**
- * Real-Pixel Computer Vision Saliency & Skin Engine
- * Performs actual pixel analysis (Skin Chrominance + Gradient Edge Saliency)
- * on the image, accurately detecting real subjects (people, landscapes, objects).
+ * Real-Pixel Computer Vision Saliency & Biometric Engine
+ * Performs actual pixel analysis (Skin Chrominance + Gradient Edge Saliency + Foreground Bounds)
+ * Accurately detects real subjects (hands, humans, objects, landscapes) without phantom stretching.
  */
 function realPixelComputerVisionScan(canvas, width, height) {
   const ctx = canvas.getContext('2d');
@@ -291,7 +291,27 @@ function realPixelComputerVisionScan(canvas, width, height) {
   const boxes = [];
   const keypoints = [];
 
-  // 1. Grid Saliency & Skin Histogram Analysis
+  // Sample corner pixels to determine background brightness/color
+  const cornerCoords = [
+    0,
+    Math.max(0, (width - 1) * 4),
+    Math.max(0, (height - 1) * width * 4),
+    Math.max(0, ((height - 1) * width + (width - 1)) * 4)
+  ];
+  let bgR = 0, bgG = 0, bgB = 0, bgSamples = 0;
+  for (const c of cornerCoords) {
+    if (c < data.length - 4) {
+      bgR += data[c];
+      bgG += data[c + 1];
+      bgB += data[c + 2];
+      bgSamples++;
+    }
+  }
+  const avgBgR = bgSamples ? bgR / bgSamples : 255;
+  const avgBgG = bgSamples ? bgG / bgSamples : 255;
+  const avgBgB = bgSamples ? bgB / bgSamples : 255;
+
+  // 1. Grid Saliency, Foreground & Skin Histogram Analysis
   const gridW = 32;
   const gridH = 32;
   const cellW = width / gridW;
@@ -301,8 +321,10 @@ function realPixelComputerVisionScan(canvas, width, height) {
 
   let totalSkinPixels = 0;
   let minSkinX = width, maxSkinX = 0, minSkinY = height, maxSkinY = 0;
+  let totalFgPixels = 0;
+  let minFgX = width, maxFgX = 0, minFgY = height, maxFgY = 0;
 
-  // Scan pixels for skin tone in YCbCr space and contrast gradients
+  // Scan pixels for skin tone in YCbCr space, foreground delta, and contrast gradients
   for (let y = 1; y < height - 1; y += 3) {
     const gy = Math.floor(y / cellH);
     const rowOffset = y * width;
@@ -315,6 +337,17 @@ function realPixelComputerVisionScan(canvas, width, height) {
       const r = data[p];
       const g = data[p + 1];
       const b = data[p + 2];
+      const a = data[p + 3];
+
+      // Foreground detection (pixel differs from background color and not transparent)
+      const diffBg = Math.abs(r - avgBgR) + Math.abs(g - avgBgG) + Math.abs(b - avgBgB);
+      if (a > 30 && diffBg > 35) {
+        totalFgPixels++;
+        if (x < minFgX) minFgX = x;
+        if (x > maxFgX) maxFgX = x;
+        if (y < minFgY) minFgY = y;
+        if (y > maxFgY) maxFgY = y;
+      }
 
       // YCbCr skin chrominance test
       const cb = -0.1687 * r - 0.3313 * g + 0.5 * b + 128;
@@ -339,70 +372,149 @@ function realPixelComputerVisionScan(canvas, width, height) {
     }
   }
 
-  // 2. If significant skin cluster is found (Human Subject detected)
-  const isHumanDetected = totalSkinPixels > (width * height * 0.015);
+  // 2. Classify Detection
+  const hasSkin = totalSkinPixels > (width * height * 0.008) && maxSkinX > minSkinX && maxSkinY > minSkinY;
+  const hasForeground = totalFgPixels > (width * height * 0.01) && maxFgX > minFgX && maxFgY > minFgY;
 
-  if (isHumanDetected && maxSkinX > minSkinX && maxSkinY > minSkinY) {
-    const sw = Math.min(width, Math.max(100, (maxSkinX - minSkinX) * 1.5));
-    const sh = Math.min(height, Math.max(120, (maxSkinY - minSkinY) * 2.2));
-    const sx = Math.max(0, (minSkinX + maxSkinX) / 2 - sw / 2);
-    const sy = Math.max(0, minSkinY - sh * 0.1);
+  if (hasSkin) {
+    // Determine whether this is an isolated hand/limb or a person with clothing
+    const skinRatioOfFg = hasForeground ? totalSkinPixels / Math.max(1, totalFgPixels) : 1;
+    const fgBelowSkin = hasForeground ? (maxFgY - maxSkinY) : 0;
+    const isIsolatedHandOrLimb = skinRatioOfFg > 0.4 || fgBelowSkin < (height * 0.12);
 
-    // Main Human Subject Box
-    boxes.push({
-      id: 'sub_main',
-      label: 'subject_track',
-      subLabel: 'ID:001A_person',
-      conf: '0.98',
-      x: Math.round(sx),
-      y: Math.round(sy),
-      width: Math.round(sw),
-      height: Math.round(sh),
-      type: 'subject'
-    });
+    if (isIsolatedHandOrLimb) {
+      // Tightly wrap the detected hand / biometric extremity
+      const padX = Math.round((maxSkinX - minSkinX) * 0.06);
+      const padY = Math.round((maxSkinY - minSkinY) * 0.06);
+      const sx = Math.max(0, minSkinX - padX);
+      const sy = Math.max(0, minSkinY - padY);
+      const sw = Math.min(width - sx, (maxSkinX - minSkinX) + padX * 2);
+      const sh = Math.min(height - sy, (maxSkinY - minSkinY) + padY * 2);
 
-    // Head / Face Box
-    const hw = Math.round(sw * 0.5);
-    const hh = Math.round(sh * 0.35);
-    const hx = Math.round(sx + (sw - hw) / 2);
-    const hy = Math.round(sy + sh * 0.03);
+      // Primary Subject Box: Hand Segment
+      boxes.push({
+        id: 'sub_main',
+        label: 'subject_track',
+        subLabel: 'biometric_hand_segment',
+        conf: '0.98',
+        x: Math.round(sx),
+        y: Math.round(sy),
+        width: Math.round(sw),
+        height: Math.round(sh),
+        type: 'subject'
+      });
 
-    boxes.push({
-      id: 'sub_head',
-      label: 'PART_head',
-      subLabel: 'face_profile',
-      conf: '0.98',
-      x: hx,
-      y: hy,
-      width: hw,
-      height: hh,
-      type: 'head'
-    });
+      // Digits / Phalanges Box (upper 45%)
+      const dw = Math.round(sw * 0.88);
+      const dh = Math.round(sh * 0.44);
+      const dx = Math.round(sx + (sw - dw) / 2);
+      const dy = Math.round(sy + sh * 0.05);
 
-    // Torso Box
-    const tw = Math.round(sw * 0.85);
-    const th = Math.round(sh * 0.42);
-    const tx = Math.round(sx + (sw - tw) / 2);
-    const ty = Math.round(hy + hh * 0.8);
+      boxes.push({
+        id: 'sub_digits',
+        label: 'PART_digits',
+        subLabel: 'phalanges_cluster',
+        conf: '0.97',
+        x: dx,
+        y: dy,
+        width: dw,
+        height: dh,
+        type: 'head'
+      });
 
-    boxes.push({
-      id: 'sub_torso',
-      label: 'PART_torso',
-      subLabel: 'OBJECT_clothing',
-      conf: '0.95',
-      x: tx,
-      y: ty,
-      width: tw,
-      height: th,
-      type: 'torso'
-    });
+      // Palm / Metacarpal Box (lower 45%)
+      const pw = Math.round(sw * 0.72);
+      const ph = Math.round(sh * 0.42);
+      const px = Math.round(sx + (sw - pw) / 2);
+      const py = Math.round(sy + sh * 0.48);
 
-    // Tracking Crosses
-    keypoints.push({ x: Math.round(hx + hw * 0.35), y: Math.round(hy + hh * 0.45), label: 'EYE-L' });
-    keypoints.push({ x: Math.round(hx + hw * 0.65), y: Math.round(hy + hh * 0.45), label: 'EYE-R' });
-    keypoints.push({ x: Math.round(hx + hw * 0.5), y: Math.round(hy + hh * 0.62), label: 'nose_tip' });
-    keypoints.push({ x: Math.round(tx + tw * 0.2), y: Math.round(ty + th * 0.25) });
-    keypoints.push({ x: Math.round(tx + tw * 0.8), y: Math.round(ty + th * 0.25) });
+      boxes.push({
+        id: 'sub_palm',
+        label: 'PART_palm',
+        subLabel: 'metacarpal_cluster',
+        conf: '0.96',
+        x: px,
+        y: py,
+        width: pw,
+        height: ph,
+        type: 'torso'
+      });
+
+      // Real Anatomical Keypoint Crosses on Hand
+      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.12), label: 'DIGIT_03' });
+      keypoints.push({ x: Math.round(sx + sw * 0.28), y: Math.round(sy + sh * 0.18), label: 'DIGIT_02' });
+      keypoints.push({ x: Math.round(sx + sw * 0.72), y: Math.round(sy + sh * 0.22), label: 'DIGIT_04' });
+      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.65), label: 'PALM_CTR' });
+      keypoints.push({ x: Math.round(sx + sw * 0.5), y: Math.round(sy + sh * 0.92), label: 'CARPAL' });
+
+    } else {
+      // Full human / torso with clothing detected below skin
+      const effectiveMinX = hasForeground ? Math.min(minSkinX, minFgX) : minSkinX;
+      const effectiveMaxX = hasForeground ? Math.max(maxSkinX, maxFgX) : maxSkinX;
+      const effectiveMinY = minSkinY;
+      const effectiveMaxY = hasForeground ? maxFgY : maxSkinY;
+
+      const padX = Math.round((effectiveMaxX - effectiveMinX) * 0.05);
+      const padY = Math.round((effectiveMaxY - effectiveMinY) * 0.05);
+      const sx = Math.max(0, effectiveMinX - padX);
+      const sy = Math.max(0, effectiveMinY - padY);
+      const sw = Math.min(width - sx, (effectiveMaxX - effectiveMinX) + padX * 2);
+      const sh = Math.min(height - sy, (effectiveMaxY - effectiveMinY) + padY * 2);
+
+      boxes.push({
+        id: 'sub_main',
+        label: 'subject_track',
+        subLabel: 'ID:001A_person',
+        conf: '0.98',
+        x: Math.round(sx),
+        y: Math.round(sy),
+        width: Math.round(sw),
+        height: Math.round(sh),
+        type: 'subject'
+      });
+
+      // Head / Face Box (bound tightly to skin area)
+      const hw = Math.round((maxSkinX - minSkinX) * 1.08);
+      const hh = Math.round((maxSkinY - minSkinY) * 1.08);
+      const hx = Math.round(Math.max(0, minSkinX - (hw - (maxSkinX - minSkinX)) / 2));
+      const hy = Math.round(Math.max(0, minSkinY - (hh - (maxSkinY - minSkinY)) / 2));
+
+      boxes.push({
+        id: 'sub_head',
+        label: 'PART_head',
+        subLabel: 'face_profile',
+        conf: '0.98',
+        x: hx,
+        y: hy,
+        width: Math.min(width - hx, hw),
+        height: Math.min(height - hy, hh),
+        type: 'head'
+      });
+
+      // Torso Box (clamped strictly above effectiveMaxY)
+      const tw = Math.round(sw * 0.85);
+      const ty = Math.round(hy + hh * 0.9);
+      const th = Math.round(Math.max(40, Math.min(height - ty, (effectiveMaxY - ty))));
+      const tx = Math.round(sx + (sw - tw) / 2);
+
+      if (th > 30) {
+        boxes.push({
+          id: 'sub_torso',
+          label: 'PART_torso',
+          subLabel: 'OBJECT_clothing',
+          conf: '0.95',
+          x: tx,
+          y: ty,
+          width: tw,
+          height: th,
+          type: 'torso'
+        });
+      }
+
+      keypoints.push({ x: Math.round(hx + hw * 0.35), y: Math.round(hy + hh * 0.45), label: 'EYE-L' });
+      keypoints.push({ x: Math.round(hx + hw * 0.65), y: Math.round(hy + hh * 0.45), label: 'EYE-R' });
+      keypoints.push({ x: Math.round(hx + hw * 0.5), y: Math.round(hy + hh * 0.62), label: 'nose_tip' });
+    }
 
   } else {
     // 3. Non-human / Landscape / Object Saliency Detection
