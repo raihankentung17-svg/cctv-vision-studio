@@ -29,60 +29,79 @@ export function getSensorStatus() {
 }
 
 /**
- * Initializes MediaPipe Tasks Vision with robust GPU/CPU fallback and timeout
+ * Initializes MediaPipe Tasks Vision with robust parallel model loading,
+ * progressive activation, and zero-downtime background resolution.
  */
-export async function initMediaPipe() {
-  if (faceLandmarker && poseLandmarker && handLandmarker) {
+export async function initMediaPipe(onStatusUpdate) {
+  if (faceLandmarker || poseLandmarker || handLandmarker) {
     sensorHealth.status = 'READY_NEURAL';
     sensorHealth.neuralAvailable = true;
-    sensorHealth.activeEngine = 'MediaPipe Neural Engine (Face + Pose + Hand)';
     return true;
   }
   if (isInitializing) return false;
 
   isInitializing = true;
+  sensorHealth.status = 'INITIALIZING_NEURAL';
+  sensorHealth.activeEngine = 'Loading MediaPipe AI (CV Standby)';
 
   try {
-    // 5-second timeout safeguard for CDN wasm resolution
-    const loadPromise = (async () => {
-      visionResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-      );
-
-      // Try GPU first, with graceful CPU fallback
-      let delegate = 'GPU';
-      try {
-        faceLandmarker = await createFaceLandmarker(visionResolver, 'GPU');
-        poseLandmarker = await createPoseLandmarker(visionResolver, 'GPU');
-        handLandmarker = await createHandLandmarker(visionResolver, 'GPU');
-      } catch (gpuErr) {
-        console.warn('MediaPipe GPU initialization failed, falling back to CPU:', gpuErr);
-        delegate = 'CPU';
-        faceLandmarker = await createFaceLandmarker(visionResolver, 'CPU');
-        poseLandmarker = await createPoseLandmarker(visionResolver, 'CPU');
-        handLandmarker = await createHandLandmarker(visionResolver, 'CPU');
-      }
-
-      sensorHealth.status = 'READY_NEURAL';
-      sensorHealth.neuralAvailable = true;
-      sensorHealth.activeEngine = `MediaPipe (${delegate}) [Face+Pose+Hand]`;
-      sensorHealth.lastError = null;
-      return true;
-    })();
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('MediaPipe CDN load timed out (using CV fallback)')), 6000)
+    visionResolver = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
     );
 
-    const result = await Promise.race([loadPromise, timeoutPromise]);
+    // Individual model loader with automatic GPU -> CPU fallback
+    const loadModel = async (creator, name) => {
+      try {
+        return await creator(visionResolver, 'GPU');
+      } catch (gpuErr) {
+        console.warn(`MediaPipe ${name} GPU init failed, trying CPU fallback:`, gpuErr);
+        try {
+          return await creator(visionResolver, 'CPU');
+        } catch (cpuErr) {
+          console.error(`MediaPipe ${name} CPU init failed:`, cpuErr);
+          return null;
+        }
+      }
+    };
+
+    // Parallel concurrent download of all 3 models (Face, Pose, Hand)
+    const [faceRes, poseRes, handRes] = await Promise.allSettled([
+      loadModel(createFaceLandmarker, 'Face'),
+      loadModel(createPoseLandmarker, 'Pose'),
+      loadModel(createHandLandmarker, 'Hand')
+    ]);
+
+    if (faceRes.status === 'fulfilled' && faceRes.value) faceLandmarker = faceRes.value;
+    if (poseRes.status === 'fulfilled' && poseRes.value) poseLandmarker = poseRes.value;
+    if (handRes.status === 'fulfilled' && handRes.value) handLandmarker = handRes.value;
+
+    const available = [];
+    if (handLandmarker) available.push('Hand');
+    if (faceLandmarker) available.push('Face');
+    if (poseLandmarker) available.push('Pose');
+
+    if (available.length > 0) {
+      sensorHealth.status = 'READY_NEURAL';
+      sensorHealth.neuralAvailable = true;
+      sensorHealth.activeEngine = `MediaPipe (${available.join('+')})`;
+      sensorHealth.lastError = null;
+      console.log(`MediaPipe Neural Engine initialized: ${sensorHealth.activeEngine}`);
+    } else {
+      sensorHealth.status = 'READY_CV_FALLBACK';
+      sensorHealth.neuralAvailable = false;
+      sensorHealth.activeEngine = 'Computer Vision Saliency Sensor';
+    }
+
+    if (onStatusUpdate) onStatusUpdate({ ...sensorHealth });
     isInitializing = false;
-    return result;
+    return sensorHealth.neuralAvailable;
   } catch (err) {
-    console.warn('MediaPipe offline or unavailable, active engine: Computer Vision Saliency Scanner.', err);
+    console.warn('MediaPipe network load error, active engine: Computer Vision Saliency Sensor.', err);
     sensorHealth.status = 'READY_CV_FALLBACK';
     sensorHealth.neuralAvailable = false;
     sensorHealth.activeEngine = 'Computer Vision Saliency Sensor';
     sensorHealth.lastError = err.message;
+    if (onStatusUpdate) onStatusUpdate({ ...sensorHealth });
     isInitializing = false;
     return false;
   }

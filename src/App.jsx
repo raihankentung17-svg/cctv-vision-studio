@@ -70,9 +70,11 @@ export default function App() {
   const [boxes, setBoxes] = useState([]);
   const [keypoints, setKeypoints] = useState([]);
 
-  // Initialize MediaPipe sensor on mount
+  // Initialize MediaPipe sensor on mount with progressive status update
   useEffect(() => {
-    initMediaPipe().then(() => {
+    initMediaPipe((liveStatus) => {
+      setSensorStatus({ ...liveStatus });
+    }).then(() => {
       setSensorStatus(getSensorStatus());
     });
   }, []);
