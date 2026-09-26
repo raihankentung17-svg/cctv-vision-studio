@@ -25,6 +25,16 @@ function createSeededRandom(seed = 12345) {
   };
 }
 
+// Font styles supported for CCTV Vision typography
+export const FONT_OPTIONS = [
+  { id: 'JetBrains Mono', name: 'JetBrains Mono', category: 'Modern Terminal', desc: 'Standar terminal modern, tajam & presisi' },
+  { id: 'Share Tech Mono', name: 'Share Tech Mono', category: 'NASA / Military HUD', desc: 'Font telemetri radar militer & aerospace' },
+  { id: 'VT323', name: 'VT323 (Retro 90s)', category: 'CCTV 90s Analog', desc: 'Font raster bitmap kamera CCTV pengawas' },
+  { id: 'Chakra Petch', name: 'Chakra Petch', category: 'Tactical Recon', desc: 'Sudut futuristik tebal & tegas' },
+  { id: 'Orbitron', name: 'Orbitron', category: 'Sci-Fi Cybernetic', desc: 'Gaya cyber sci-fi wide letterforms' },
+  { id: 'Space Mono', name: 'Space Mono', category: 'Brutalist Monospace', desc: 'Monospace editorial cyberpunk tebal' }
+];
+
 export function hexToRgb(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) {
@@ -39,7 +49,7 @@ export function hexToRgb(hex) {
 }
 
 /**
- * Main Render Pipeline with dynamic resolution scaling
+ * Main Render Pipeline with dynamic resolution scaling and subpixel precision
  */
 export function renderCCTVVisionEffect(canvas, image, options) {
   if (!canvas || !image) return;
@@ -51,6 +61,13 @@ export function renderCCTVVisionEffect(canvas, image, options) {
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
+  }
+
+  // Ensure high-grade vector text smoothing and anti-aliasing (prevents font pixelation)
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  if ('textRendering' in ctx) {
+    ctx.textRendering = 'geometricPrecision';
   }
 
   // Calculate resolution-adaptive scale factor S
@@ -264,12 +281,14 @@ function renderDiagnosticHexDumps(ctx, mask, width, height, options, S) {
   const { cols, rows, blockSize, cells } = mask;
   const seed = (options.seed || 100) + 77;
   const rng = createSeededRandom(seed);
+  const fontScale = options.fontScale || 1.0;
+  const fontFamily = options.fontFamily || 'JetBrains Mono';
 
-  const fontSize = Math.max(8, Math.round(9 * S));
-  const lineHeight = Math.round(11 * S);
+  const fontSize = Math.max(8, Math.round(9 * S * fontScale));
+  const lineHeight = Math.round(11 * S * fontScale);
 
   ctx.save();
-  ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+  ctx.font = `bold ${fontSize}px "${fontFamily}", monospace`;
   ctx.fillStyle = '#FFFFFF';
   ctx.textBaseline = 'top';
 
@@ -279,11 +298,11 @@ function renderDiagnosticHexDumps(ctx, mask, width, height, options, S) {
       if (cells[idx] && cells[idx + 1] && cells[idx + cols] && cells[idx + cols + 1]) {
         if (rng() < 0.22) {
           const codeSnippet = DIAGNOSTIC_CODES[Math.floor(rng() * DIAGNOSTIC_CODES.length)];
-          const posX = c * blockSize + Math.round(3 * S);
-          let posY = r * blockSize + Math.round(3 * S);
+          const posX = Math.round(c * blockSize + 3 * S);
+          let posY = Math.round(r * blockSize + 3 * S);
 
           for (const line of codeSnippet) {
-            if (posY + lineHeight < height && posX + 80 * S < width) {
+            if (posY + lineHeight < height && posX + 80 * S * fontScale < width) {
               ctx.fillText(line, posX, posY);
               posY += lineHeight;
             }
@@ -302,9 +321,11 @@ function renderDiagnosticHexDumps(ctx, mask, width, height, options, S) {
  */
 function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight, S) {
   const themeColor = options.themeColor || '#FFE600';
+  const fontScale = options.fontScale || 1.0;
+  const fontFamily = options.fontFamily || 'JetBrains Mono';
   const strokeWidth = Math.max(1.25, (options.boxStrokeWidth || 1.25) * S);
-  const fontSize = Math.max(10, Math.round(11 * S));
-  const badgeH = Math.round(16 * S);
+  const fontSize = Math.max(9, Math.round(11 * S * fontScale));
+  const badgeH = Math.round(Math.max(16 * S, fontSize + 6 * S));
 
   ctx.save();
   ctx.lineWidth = strokeWidth;
@@ -312,11 +333,11 @@ function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight, S) 
   ctx.fillStyle = themeColor;
 
   for (const rawBox of boxes) {
-    // Strictly clamp box within canvas boundaries
-    const x = Math.max(0, Math.min(canvasWidth - 10, rawBox.x));
-    const y = Math.max(0, Math.min(canvasHeight - 10, rawBox.y));
-    const width = Math.max(10, Math.min(canvasWidth - x, rawBox.width));
-    const height = Math.max(10, Math.min(canvasHeight - y, rawBox.height));
+    // Strictly clamp box within canvas boundaries and snap to integer pixels
+    const x = Math.round(Math.max(0, Math.min(canvasWidth - 10, rawBox.x)));
+    const y = Math.round(Math.max(0, Math.min(canvasHeight - 10, rawBox.y)));
+    const width = Math.round(Math.max(10, Math.min(canvasWidth - x, rawBox.width)));
+    const height = Math.round(Math.max(10, Math.min(canvasHeight - y, rawBox.height)));
 
     const { label, subLabel, conf } = rawBox;
 
@@ -352,24 +373,24 @@ function renderBoundingBoxes(ctx, boxes, options, canvasWidth, canvasHeight, S) 
     const subText = subLabel ? ` ${subLabel}` : '';
     let fullTag = `${mainText}${subText} conf: ${displayConf}`;
 
-    ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
+    ctx.font = `600 ${fontSize}px "${fontFamily}", monospace`;
     ctx.textBaseline = 'bottom';
     
-    let textWidth = ctx.measureText(fullTag).width;
+    let textWidth = Math.round(ctx.measureText(fullTag).width);
     if (textWidth > width - 16) {
       fullTag = `[${label || 'track'}] ${displayConf}`;
-      textWidth = ctx.measureText(fullTag).width;
+      textWidth = Math.round(ctx.measureText(fullTag).width);
     }
 
     const badgeW = textWidth + Math.round(8 * S);
-    const badgeX = Math.max(2, Math.min(x, width - badgeW - 2));
-    const badgeY = Math.max(0, y - badgeH);
+    const badgeX = Math.round(Math.max(2, Math.min(x, canvasWidth - badgeW - 2)));
+    const badgeY = Math.round(Math.max(0, y - badgeH));
 
     ctx.fillStyle = 'rgba(7, 9, 14, 0.85)';
     ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
 
     ctx.fillStyle = themeColor;
-    ctx.fillText(fullTag, badgeX + Math.round(4 * S), y - Math.round(3 * S));
+    ctx.fillText(fullTag, badgeX + Math.round(4 * S), Math.round(badgeY + badgeH - 3 * S));
   }
 
   ctx.restore();
@@ -405,6 +426,8 @@ function renderTrackingCrosses(ctx, keypoints, options, S) {
  */
 function renderCCTVTelemetry(ctx, width, height, options, S) {
   const themeColor = options.themeColor || '#FFE600';
+  const fontScale = options.fontScale || 1.0;
+  const fontFamily = options.fontFamily || 'JetBrains Mono';
   const {
     cctvTag = 'CCTV_04',
     frameNumber = 'FRAME: 0234',
@@ -413,14 +436,14 @@ function renderCCTVTelemetry(ctx, width, height, options, S) {
     watermark = 'CREATED BY VISION_STUDIO'
   } = options.telemetry || {};
 
-  // Fit font size and margins to the actual canvas width
-  const baseFontSize = Math.round(11 * S);
-  const fontSize = Math.max(8, Math.min(baseFontSize, Math.floor(width / 34)));
-  const marginX = Math.max(6, Math.min(Math.round(16 * S), Math.floor(width * 0.04)));
-  const marginY = Math.max(6, Math.min(Math.round(16 * S), Math.floor(height * 0.03)));
+  // Fit font size and margins to the actual canvas width and user font scale
+  const baseFontSize = Math.round(11 * S * fontScale);
+  const fontSize = Math.max(8, Math.min(baseFontSize, Math.floor((width / 32) * fontScale)));
+  const marginX = Math.round(Math.max(6, Math.min(16 * S, width * 0.04)));
+  const marginY = Math.round(Math.max(6, Math.min(16 * S, height * 0.03)));
 
   ctx.save();
-  ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
+  ctx.font = `600 ${fontSize}px "${fontFamily}", monospace`;
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'top';
 
@@ -430,13 +453,13 @@ function renderCCTVTelemetry(ctx, width, height, options, S) {
     ctx.fillText(leftTag, marginX, marginY);
 
     const rightTag = `${frameNumber}  2030`;
-    const rightWidth = ctx.measureText(rightTag).width;
-    ctx.fillText(rightTag, width - rightWidth - marginX, marginY);
+    const rightWidth = Math.round(ctx.measureText(rightTag).width);
+    ctx.fillText(rightTag, Math.round(width - rightWidth - marginX), marginY);
 
-    const leftWidth = ctx.measureText(leftTag).width;
-    const wmWidth = ctx.measureText(watermark).width;
+    const leftWidth = Math.round(ctx.measureText(leftTag).width);
+    const wmWidth = Math.round(ctx.measureText(watermark).width);
     if (width - leftWidth - rightWidth - marginX * 4 > wmWidth + 20) {
-      ctx.fillText(watermark, (width - wmWidth) / 2, marginY);
+      ctx.fillText(watermark, Math.round((width - wmWidth) / 2), marginY);
     }
   } else if (width >= 300) {
     // Medium / Compact Single Line Layout
@@ -444,36 +467,36 @@ function renderCCTVTelemetry(ctx, width, height, options, S) {
     ctx.fillText(leftTag, marginX, marginY);
 
     const rightTag = `${frameNumber}`;
-    const rightWidth = ctx.measureText(rightTag).width;
-    ctx.fillText(rightTag, Math.max(marginX + ctx.measureText(leftTag).width + 8, width - rightWidth - marginX), marginY);
+    const rightWidth = Math.round(ctx.measureText(rightTag).width);
+    ctx.fillText(rightTag, Math.round(Math.max(marginX + ctx.measureText(leftTag).width + 8, width - rightWidth - marginX)), marginY);
   } else {
     // Ultra-Narrow Canvas Layout (< 300px): Clean 2-row telemetry so nothing ever clips
     const row1Left = `[${cctvTag}]`;
     const row1Right = `F:0234`;
     ctx.fillText(row1Left, marginX, marginY);
-    const r1W = ctx.measureText(row1Right).width;
-    ctx.fillText(row1Right, width - r1W - marginX, marginY);
+    const r1W = Math.round(ctx.measureText(row1Right).width);
+    ctx.fillText(row1Right, Math.round(width - r1W - marginX), marginY);
 
-    const row2Y = marginY + fontSize + 3;
+    const row2Y = Math.round(marginY + fontSize + 3);
     const row2Left = `${confidence}`;
     const row2Right = `2030`;
     ctx.fillText(row2Left, marginX, row2Y);
-    const r2W = ctx.measureText(row2Right).width;
-    ctx.fillText(row2Right, width - r2W - marginX, row2Y);
+    const r2W = Math.round(ctx.measureText(row2Right).width);
+    ctx.fillText(row2Right, Math.round(width - r2W - marginX), row2Y);
   }
 
   // Bottom REC indicator safely inside viewport
-  const bottomY = height - marginY;
+  const bottomY = Math.round(height - marginY);
   const recDotRadius = Math.max(3, Math.min(Math.round(4 * S), Math.floor(width * 0.02)));
 
   ctx.fillStyle = '#FF3B30';
   ctx.beginPath();
-  ctx.arc(marginX + recDotRadius, bottomY - recDotRadius / 2, recDotRadius, 0, Math.PI * 2);
+  ctx.arc(Math.round(marginX + recDotRadius), Math.round(bottomY - recDotRadius / 2), recDotRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = themeColor;
   ctx.textBaseline = 'middle';
-  ctx.fillText('REC', marginX + recDotRadius * 2 + Math.max(4, Math.round(6 * S)), bottomY - recDotRadius / 2);
+  ctx.fillText('REC', Math.round(marginX + recDotRadius * 2 + Math.max(4, Math.round(6 * S))), Math.round(bottomY - recDotRadius / 2));
 
   ctx.restore();
 }

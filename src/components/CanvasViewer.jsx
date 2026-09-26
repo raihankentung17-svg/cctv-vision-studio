@@ -122,43 +122,61 @@ export default function CanvasViewer({
     return () => observer.disconnect();
   }, []);
 
-  // 2. Render Canvas Pipeline (Original vs CCTV Glitch Effect)
+  // 2. Render Canvas Pipeline (Original vs CCTV Glitch Effect with Font Readiness Guarantee)
   useEffect(() => {
     if (!activeImage || !canvasRef.current) return;
 
-    const startTime = performance.now();
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const width = activeImage.width || activeImage.naturalWidth;
-    const height = activeImage.height || activeImage.naturalHeight;
+    let isCancelled = false;
 
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
+    const executeRender = () => {
+      if (isCancelled || !canvasRef.current) return;
 
-    if (isHoldingOriginal) {
-      // Direct raw render without effects for instant A/B comparison
-      ctx.clearRect(0, 0, width, height);
-      if (rawImageRef.current) {
-        ctx.drawImage(rawImageRef.current, 0, 0, width, height);
-      } else {
-        ctx.drawImage(activeImage, 0, 0, width, height);
+      const startTime = performance.now();
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      const width = activeImage.width || activeImage.naturalWidth;
+      const height = activeImage.height || activeImage.naturalHeight;
+
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
       }
-      ctx.font = '700 13px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#FFE600';
-      ctx.fillText('[ORIGINAL RAW BUFFER - NO EFFECTS]', 20, 24);
+
+      if (isHoldingOriginal) {
+        // Direct raw render without effects for instant A/B comparison
+        ctx.clearRect(0, 0, width, height);
+        if (rawImageRef.current) {
+          ctx.drawImage(rawImageRef.current, 0, 0, width, height);
+        } else {
+          ctx.drawImage(activeImage, 0, 0, width, height);
+        }
+        ctx.font = '700 13px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#FFE600';
+        ctx.fillText('[ORIGINAL RAW BUFFER - NO EFFECTS]', 20, 24);
+      } else {
+        const fullOptions = {
+          ...config,
+          boxes,
+          keypoints
+        };
+        renderCCTVVisionEffect(canvas, activeImage, fullOptions);
+      }
+
+      const elapsed = Math.round(performance.now() - startTime);
+      setRenderTime(elapsed);
+    };
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        executeRender();
+      });
     } else {
-      const fullOptions = {
-        ...config,
-        boxes,
-        keypoints
-      };
-      renderCCTVVisionEffect(canvas, activeImage, fullOptions);
+      executeRender();
     }
 
-    const elapsed = Math.round(performance.now() - startTime);
-    setRenderTime(elapsed);
+    return () => {
+      isCancelled = true;
+    };
   }, [activeImage, config, boxes, keypoints, canvasRef, isHoldingOriginal]);
 
   // 3. Spacebar shortcut to temporarily activate Pan tool

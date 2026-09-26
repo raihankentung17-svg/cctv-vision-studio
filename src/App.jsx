@@ -7,6 +7,7 @@ import PresetsModal from './components/PresetsModal';
 import { STYLE_PRESETS } from './utils/sampleImages';
 import { scanImage, initMediaPipe, getSensorStatus } from './utils/mediaPipeService';
 import { prepareOptimizedImage } from './utils/imageProcessor';
+import { renderCCTVVisionEffect } from './utils/glitchEngine';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -56,6 +57,9 @@ export default function App() {
     contrastThreshold: defaultPreset.contrastThreshold,
     blockSize: defaultPreset.blockSize,
     density: defaultPreset.density,
+    fontFamily: 'JetBrains Mono',
+    fontScale: 1.0,
+    exportMultiplier: 2,
     confineToBoxes: true,
     showBoxes: true,
     showKeypoints: true,
@@ -215,12 +219,63 @@ export default function App() {
     setScanNotification(null);
   };
 
-  // Export finished image at full resolution
-  const handleExportImage = () => {
+  // Export finished image at ultra-crisp resolution (with 2X Supersampling Anti-Pecah)
+  const handleExportImage = async () => {
     if (!canvasRef.current || !imageSrc) return;
+
+    // Ensure all custom web fonts are fully rasterized by the browser
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const multiplier = config.exportMultiplier || 2;
+    let finalDataUrl = '';
+
+    if (multiplier > 1 && processedCanvas) {
+      // 2X Supersampling: creates high-resolution offscreen canvas with geometric precision
+      const offscreen = document.createElement('canvas');
+      const baseW = processedCanvas.width;
+      const baseH = processedCanvas.height;
+      offscreen.width = baseW * multiplier;
+      offscreen.height = baseH * multiplier;
+
+      const offCtx = offscreen.getContext('2d');
+      offCtx.imageSmoothingEnabled = true;
+      offCtx.imageSmoothingQuality = 'high';
+      if ('textRendering' in offCtx) {
+        offCtx.textRendering = 'geometricPrecision';
+      }
+
+      // Scale machine-vision detection boxes and tracking keypoints proportionally
+      const scaledBoxes = (boxes || []).map((b) => ({
+        ...b,
+        x: Math.round(b.x * multiplier),
+        y: Math.round(b.y * multiplier),
+        width: Math.round(b.width * multiplier),
+        height: Math.round(b.height * multiplier)
+      }));
+
+      const scaledKeypoints = (keypoints || []).map((k) => ({
+        ...k,
+        x: Math.round(k.x * multiplier),
+        y: Math.round(k.y * multiplier)
+      }));
+
+      const fullOptions = {
+        ...config,
+        boxes: scaledBoxes,
+        keypoints: scaledKeypoints
+      };
+
+      renderCCTVVisionEffect(offscreen, processedCanvas, fullOptions);
+      finalDataUrl = offscreen.toDataURL('image/png');
+    } else {
+      finalDataUrl = canvasRef.current.toDataURL('image/png');
+    }
+
     const link = document.createElement('a');
     link.download = `cctv_vision_${Date.now()}.png`;
-    link.href = canvasRef.current.toDataURL('image/png');
+    link.href = finalDataUrl;
     link.click();
   };
 

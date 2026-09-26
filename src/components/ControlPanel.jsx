@@ -9,10 +9,12 @@ import {
   CheckCircle2,
   X,
   Crop,
-  Scaling
+  Scaling,
+  Type
 } from 'lucide-react';
 import BoxManager from './BoxManager';
 import { ASPECT_RATIOS } from '../utils/imageProcessor';
+import { FONT_OPTIONS } from '../utils/glitchEngine';
 
 export const PALETTE_PRESETS = [
   { name: 'Acid Yellow', hex: '#FFE600' },
@@ -553,7 +555,132 @@ export default function ControlPanel({
           </div>
         </section>
 
-        {/* 4. Display & Telemetry Toggles */}
+        {/* 4. Typography, Font Scaling & Anti-Pecah Settings */}
+        <section
+          className={`space-y-3 p-3.5 rounded-lg border text-xs ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-xs">
+              <Type className="w-3.5 h-3.5 text-cyan-500" />
+              <span className={isDark ? 'text-slate-200' : 'text-slate-900'}>
+                Typography & Font Engine
+              </span>
+            </div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+              isDark ? 'bg-cyan-950 text-cyan-400 border border-cyan-800/60' : 'bg-cyan-100 text-cyan-900 border border-cyan-300'
+            }`}>
+              Anti-Aliased
+            </span>
+          </div>
+
+          {/* Font Family Selection Grid */}
+          <div className="space-y-1.5">
+            <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              <span>Font Style (6 Variasi):</span>
+              <span className="text-cyan-600 font-mono font-bold">
+                {config.fontFamily || 'JetBrains Mono'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {FONT_OPTIONS.map((f) => {
+                const isSelected = (config.fontFamily || 'JetBrains Mono') === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => onChangeConfig({ fontFamily: f.id })}
+                    style={{ fontFamily: f.id }}
+                    className={`min-h-[44px] px-2.5 py-1.5 rounded border text-left flex flex-col justify-center transition-all cursor-pointer ${
+                      isSelected
+                        ? isDark
+                          ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 ring-1 ring-cyan-500/50'
+                          : 'bg-cyan-50 border-cyan-500 text-cyan-900 ring-1 ring-cyan-500/50'
+                        : isDark
+                        ? 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+                        : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                    }`}
+                    title={f.desc}
+                  >
+                    <span className="font-bold text-[11px] leading-tight truncate">{f.name}</span>
+                    <span className={`text-[9px] uppercase tracking-wider font-sans ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {f.category}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Font Size Scale Slider */}
+          <div className="space-y-1.5 pt-1 border-t border-slate-700/40">
+            <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              <span>Ukuran Font (Slider):</span>
+              <span className="text-cyan-600 font-mono font-bold">
+                {Math.round((config.fontScale || 1.0) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.7"
+              max="2.2"
+              step="0.05"
+              value={config.fontScale || 1.0}
+              onChange={(e) => onChangeConfig({ fontScale: parseFloat(e.target.value) })}
+              className="w-full accent-cyan-500 cursor-pointer h-2"
+            />
+            <div className={`flex justify-between text-[10px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+              <span>70% (Kecil)</span>
+              <span>100% (Normal)</span>
+              <span>220% (Besar)</span>
+            </div>
+          </div>
+
+          {/* Anti-Pecah Download Multiplier */}
+          <div className="space-y-1.5 pt-1 border-t border-slate-700/40">
+            <div className={`flex justify-between text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              <span>Ketajaman Ekspor (Bebas Pecah):</span>
+              <span className="text-cyan-600 font-mono font-bold">
+                {(config.exportMultiplier || 2) === 2 ? '2X Ultra-HD' : '1X Standar'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => onChangeConfig({ exportMultiplier: 1 })}
+                className={`min-h-[38px] px-2 py-1 rounded text-xs font-bold border transition-colors cursor-pointer ${
+                  (config.exportMultiplier || 2) === 1
+                    ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-xs'
+                    : isDark
+                    ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
+                    : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                }`}
+              >
+                1X Native
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeConfig({ exportMultiplier: 2 })}
+                className={`min-h-[38px] px-2 py-1 rounded text-xs font-bold border transition-colors cursor-pointer ${
+                  (config.exportMultiplier || 2) === 2
+                    ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-xs'
+                    : isDark
+                    ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
+                    : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                }`}
+              >
+                2X Ultra-Crisp ✨
+              </button>
+            </div>
+            <p className={`text-[10px] leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Supersampling 2X merender teks dan reticle vektor dengan ketajaman piksel ganda agar hasil download tidak buram/pecah.
+            </p>
+          </div>
+        </section>
+
+        {/* 5. Display & Telemetry Toggles */}
         <section
           className={`space-y-2.5 p-3.5 rounded-lg border text-xs font-medium ${
             isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-300'
