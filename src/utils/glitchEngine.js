@@ -55,8 +55,10 @@ export function renderCCTVVisionEffect(canvas, image, options) {
   if (!canvas || !image) return;
 
   const ctx = canvas.getContext('2d');
-  const width = image.width || image.naturalWidth;
-  const height = image.height || image.naturalHeight;
+  const imgW = image.width || image.naturalWidth;
+  const imgH = image.height || image.naturalHeight;
+  const width = (canvas.width > 0 && canvas.width !== 300) ? canvas.width : imgW;
+  const height = (canvas.height > 0 && canvas.height !== 150) ? canvas.height : imgH;
 
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;

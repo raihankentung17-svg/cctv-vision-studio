@@ -24,14 +24,13 @@ export function detectContentBounds(canvas) {
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
 
-  // Sample outer perimeter corners and edges
+  // Sample 4 outer corner points with slight inset to avoid border artifacts
+  const inset = 3;
   const samplePoints = [
-    0, // top-left
-    Math.max(0, (w - 1) * 4), // top-right
-    Math.max(0, (h - 1) * w * 4), // bottom-left
-    Math.max(0, ((h - 1) * w + (w - 1)) * 4), // bottom-right
-    Math.max(0, Math.floor(w / 2) * 4), // top-center
-    Math.max(0, ((h - 1) * w + Math.floor(w / 2)) * 4) // bottom-center
+    (inset * w + inset) * 4, // top-left
+    (inset * w + Math.max(0, w - 1 - inset)) * 4, // top-right
+    (Math.max(0, h - 1 - inset) * w + inset) * 4, // bottom-left
+    (Math.max(0, h - 1 - inset) * w + Math.max(0, w - 1 - inset)) * 4 // bottom-right
   ];
 
   let sumR = 0, sumG = 0, sumB = 0, validSamples = 0;
@@ -117,8 +116,8 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
   const srcCtx = srcCanvas.getContext('2d');
   srcCtx.drawImage(sourceImage, 0, 0, rawW, rawH);
 
-  // Step 2: Auto-trim excessive whitespace if requested or in smart focus
-  const shouldTrim = autoTrim || aspectRatioId === 'smart_focus' || fitMode === 'smart_fit';
+  // Step 2: Auto-trim excessive whitespace ONLY if explicitly requested by autoTrim or smart_focus
+  const shouldTrim = autoTrim || aspectRatioId === 'smart_focus';
   const cropBox = shouldTrim ? detectContentBounds(srcCanvas) : { minX: 0, minY: 0, width: rawW, height: rawH };
 
   const croppedCanvas = document.createElement('canvas');
@@ -175,17 +174,18 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
   let renderW, renderH, renderX, renderY;
 
   if (fitMode === 'cover') {
+    // Fill the frame (may crop overflow)
     if (imgRatio > targetRatio) {
       renderH = targetH;
-      renderW = imgW * (targetH / imgH);
+      renderW = Math.round(imgW * (targetH / imgH));
     } else {
       renderW = targetW;
-      renderH = imgH * (targetW / imgW);
+      renderH = Math.round(imgH * (targetW / imgW));
     }
     renderX = Math.round((targetW - renderW) / 2);
     renderY = Math.round((targetH - renderH) / 2);
   } else if (fitMode === 'smart_fit') {
-    // Smart Fit: Centers the trimmed subject nicely with 8% padding inside the frame
+    // Smart Fit: Centers the image with 8% safe margin inside the frame (zero clipping of subject or telemetry)
     const usableW = targetW * 0.90;
     const usableH = targetH * 0.90;
     const scale = Math.min(usableW / imgW, usableH / imgH);
@@ -194,13 +194,13 @@ export function prepareOptimizedImage(sourceImage, options = {}) {
     renderX = Math.round((targetW - renderW) / 2);
     renderY = Math.round((targetH - renderH) / 2);
   } else {
-    // Contain: Preserves whole image within bounds
+    // Contain: Preserves 100% of image within bounds with clean letterbox margins
     if (imgRatio > targetRatio) {
       renderW = targetW;
-      renderH = imgH * (targetW / imgW);
+      renderH = Math.round(imgH * (targetW / imgW));
     } else {
       renderH = targetH;
-      renderW = imgW * (targetH / imgH);
+      renderW = Math.round(imgW * (targetH / imgH));
     }
     renderX = Math.round((targetW - renderW) / 2);
     renderY = Math.round((targetH - renderH) / 2);

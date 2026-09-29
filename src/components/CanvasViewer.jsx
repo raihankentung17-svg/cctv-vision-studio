@@ -82,8 +82,8 @@ export default function CanvasViewer({
     const vpH = Math.max(100, viewportRef.current.clientHeight - 64);
     const scaleW = vpW / w;
     const scaleH = vpH / h;
-    const fit = Math.min(1.2, Math.max(0.15, Math.min(scaleW, scaleH)));
-    return Number(fit.toFixed(2));
+    const fit = Math.min(1.0, Math.max(0.15, Math.min(scaleW, scaleH)));
+    return Number(fit.toFixed(4));
   };
 
   // 1. Load active image from processedImage (or fallback to imageSrc)
@@ -104,7 +104,7 @@ export default function CanvasViewer({
     setImageDims({ width: w, height: h });
     setActiveImage(target);
 
-    // Initial smooth fit on new image load
+    // Initial smooth fit on new image load or ratio switch
     requestAnimationFrame(() => {
       const fit = calculateFitScale(w, h);
       setScale(fit);
@@ -112,15 +112,23 @@ export default function CanvasViewer({
     });
   }, [processedImage, imageSrc]);
 
-  // Viewport ResizeObserver to adapt fit if dimensions change
+  // Viewport ResizeObserver to adapt fit if viewport dimensions change
   useEffect(() => {
     if (!viewportRef.current) return;
     const observer = new ResizeObserver(() => {
-      // Only auto-adjust if no image or image loaded
+      if (imageDims.width > 0 && imageDims.height > 0) {
+        setPan((currentPan) => {
+          if (currentPan.x === 0 && currentPan.y === 0) {
+            const fit = calculateFitScale(imageDims.width, imageDims.height);
+            setScale(fit);
+          }
+          return currentPan;
+        });
+      }
     });
     observer.observe(viewportRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [imageDims.width, imageDims.height]);
 
   // 2. Render Canvas Pipeline (Original vs CCTV Glitch Effect with Font Readiness Guarantee)
   useEffect(() => {
@@ -637,16 +645,23 @@ export default function CanvasViewer({
         ) : (
           /* Scaled & Translated Canvas Container */
           <div
-            className="relative shadow-2xl rounded-xs overflow-hidden border border-slate-700/80 transition-transform duration-75 ease-out"
+            className="relative shadow-2xl rounded-xs overflow-hidden border border-slate-700/80 transition-transform duration-75 ease-out shrink-0"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+              width: imageDims.width > 0 ? `${Math.round(imageDims.width * scale)}px` : 'auto',
+              height: imageDims.height > 0 ? `${Math.round(imageDims.height * scale)}px` : 'auto',
+              transform: `translate(${pan.x}px, ${pan.y}px)`,
               transformOrigin: 'center center'
             }}
           >
             <canvas
               ref={canvasRef}
               onClick={handleCanvasClick}
-              className="block max-w-none"
+              className="block pointer-events-auto"
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'block'
+              }}
               title={
                 activeTool === 'crosshair' && !isSpacePressed
                   ? 'Klik untuk menambahkan Red Tracking Cross (+)'
