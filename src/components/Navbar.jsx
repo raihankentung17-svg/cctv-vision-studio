@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Camera,
-  Terminal,
   Download,
   Sliders,
   Sun,
@@ -16,7 +15,6 @@ export default function Navbar({
   detectionMode,
   theme = 'dark',
   onToggleTheme,
-  onOpenPrompt,
   onExportImage,
   onOpenPresets,
   onClearCanvas,
@@ -126,19 +124,6 @@ export default function Navbar({
           <span className="hidden sm:inline">Presets</span>
         </button>
 
-        {/* Alpha Prompt Button */}
-        <button
-          onClick={onOpenPrompt}
-          className={`min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
-            isDark
-              ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200 hover:text-amber-300'
-              : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-900 hover:text-amber-800'
-          }`}
-          title="Lihat formula Alpha Prompt untuk AI"
-        >
-          <Terminal className="w-3.5 h-3.5 text-amber-500" />
-          <span>Alpha Prompt</span>
-        </button>
 
         {/* Clear Canvas Button */}
         {hasImage && (

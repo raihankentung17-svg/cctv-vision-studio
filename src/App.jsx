@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ControlPanel from './components/ControlPanel';
 import CanvasViewer from './components/CanvasViewer';
-import AlphaPromptModal from './components/AlphaPromptModal';
 import PresetsModal from './components/PresetsModal';
 import { STYLE_PRESETS } from './utils/sampleImages';
 import { scanImage, initMediaPipe, getSensorStatus } from './utils/mediaPipeService';
@@ -23,7 +22,6 @@ export default function App() {
     localStorage.setItem('cctv_theme', next);
   };
 
-  const [isPromptOpen, setIsPromptOpen] = useState(false);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [sensorStatus, setSensorStatus] = useState(getSensorStatus());
@@ -300,7 +298,6 @@ export default function App() {
         detectionMode={config.detectionMode}
         theme={theme}
         onToggleTheme={toggleTheme}
-        onOpenPrompt={() => setIsPromptOpen(true)}
         onOpenPresets={() => setIsPresetsOpen(true)}
         onClearCanvas={handleClearCanvas}
         onExportImage={handleExportImage}
@@ -355,14 +352,6 @@ export default function App() {
           onChangeAutoTrim={setAutoTrim}
         />
       </div>
-
-      {/* Alpha Prompt Modal */}
-      <AlphaPromptModal
-        isOpen={isPromptOpen}
-        onClose={() => setIsPromptOpen(false)}
-        config={{ ...config, boxes }}
-        theme={theme}
-      />
 
       {/* Style Presets Modal */}
       <PresetsModal
