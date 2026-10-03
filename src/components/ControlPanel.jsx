@@ -10,7 +10,8 @@ import {
   X,
   Crop,
   Scaling,
-  Type
+  Type,
+  Eye
 } from 'lucide-react';
 import BoxManager from './BoxManager';
 import { ASPECT_RATIOS } from '../utils/imageProcessor';
@@ -49,7 +50,8 @@ export default function ControlPanel({
   autoTrim = false,
   onChangeAutoTrim,
   canvasBg = '#ffffff',
-  onChangeCanvasBg
+  onChangeCanvasBg,
+  onSwitchTab
 }) {
   const fileInputRef = useRef(null);
   const isDark = theme === 'dark';
@@ -78,7 +80,7 @@ export default function ControlPanel({
 
   return (
     <aside
-      className={`w-full lg:w-84 xl:w-92 h-full border-r flex flex-col font-tech text-xs select-none transition-colors duration-150 ${
+      className={`w-full lg:w-84 xl:w-92 h-full lg:border-r flex flex-col font-tech text-xs select-none transition-colors duration-150 ${
         isDark
           ? 'border-slate-800 bg-[#0c1017] text-slate-100'
           : 'border-slate-300 bg-white text-slate-900 shadow-xs'
@@ -86,30 +88,46 @@ export default function ControlPanel({
     >
       {/* Panel Header */}
       <div
-        className={`p-3.5 border-b flex items-center justify-between transition-colors ${
+        className={`p-3 sm:p-3.5 border-b flex items-center justify-between transition-colors ${
           isDark ? 'border-slate-800 bg-[#121722]' : 'border-slate-200 bg-slate-100'
         }`}
       >
         <div className="flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-cyan-600" />
+          <Sliders className="w-4 h-4 text-cyan-600 shrink-0" />
           <span className="font-bold tracking-wider uppercase text-xs">Vision Control Matrix</span>
         </div>
-        <button
-          onClick={handleRandomizeSeed}
-          className={`min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded border transition-colors cursor-pointer text-xs font-semibold ${
-            isDark
-              ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
-              : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
-          }`}
-          title="Randomize glitch seed"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-cyan-600" />
-          <span>Glitch Seed</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onSwitchTab && (
+            <button
+              onClick={() => onSwitchTab('canvas')}
+              className={`lg:hidden min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded border font-bold text-xs transition-colors cursor-pointer ${
+                isDark
+                  ? 'bg-cyan-950/70 border-cyan-700 text-cyan-300 hover:bg-cyan-900'
+                  : 'bg-cyan-100 border-cyan-400 text-cyan-950 hover:bg-cyan-200'
+              }`}
+              title="Lihat Kanvas"
+            >
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span>Lihat Kanvas</span>
+            </button>
+          )}
+          <button
+            onClick={handleRandomizeSeed}
+            className={`min-h-[36px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded border transition-colors cursor-pointer text-xs font-semibold ${
+              isDark
+                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
+                : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
+            }`}
+            title="Randomize glitch seed"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+            <span className="hidden sm:inline">Glitch Seed</span>
+          </button>
+        </div>
       </div>
 
       {/* Scrollable Controls */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 lg:pb-6">
         {/* 1. Image Source & MediaPipe AI Scan */}
         <section className="space-y-2">
           <div

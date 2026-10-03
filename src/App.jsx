@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Camera, Sliders, Palette, Download } from 'lucide-react';
 import Navbar from './components/Navbar';
 import ControlPanel from './components/ControlPanel';
 import CanvasViewer from './components/CanvasViewer';
@@ -22,6 +23,7 @@ export default function App() {
     localStorage.setItem('cctv_theme', next);
   };
 
+  const [mobileTab, setMobileTab] = useState('canvas'); // 'canvas' | 'controls'
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [sensorStatus, setSensorStatus] = useState(getSensorStatus());
@@ -155,6 +157,7 @@ export default function App() {
   const handleUploadImage = (dataUrl) => {
     setImageSrc(dataUrl);
     setScanNotification(null);
+    setMobileTab('canvas');
   };
 
   // Select style preset
@@ -177,6 +180,7 @@ export default function App() {
       title: 'Preset Diterapkan',
       message: `Style ${preset.colorName} aktif (Mode: ${preset.detectionMode.toUpperCase()})`
     });
+    setMobileTab('canvas');
   };
 
   // Trigger manual MediaPipe scan on active processed canvas
@@ -287,7 +291,7 @@ export default function App() {
 
   return (
     <div
-      className={`flex flex-col h-screen w-screen overflow-hidden font-tech transition-colors duration-150 ${
+      className={`flex flex-col h-screen h-[100dvh] w-screen overflow-hidden font-tech transition-colors duration-150 ${
         theme === 'dark' ? 'bg-[#06080c] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
@@ -307,51 +311,131 @@ export default function App() {
 
       {/* Main Studio Workspace */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-        {/* Left Control Panel */}
-        <ControlPanel
-          config={config}
-          onChangeConfig={handleUpdateConfig}
-          onUploadImage={handleUploadImage}
-          onRunMediaPipeScan={handleRunMediaPipeScan}
-          isScanning={isScanning}
-          scanNotification={scanNotification}
-          onDismissNotification={() => setScanNotification(null)}
-          sensorStatus={sensorStatus}
-          boxes={boxes}
-          onUpdateBoxes={setBoxes}
-          keypoints={keypoints}
-          onUpdateKeypoints={setKeypoints}
-          theme={theme}
-          hasImage={Boolean(imageSrc)}
-          aspectRatio={aspectRatio}
-          onChangeAspectRatio={setAspectRatio}
-          fitMode={fitMode}
-          onChangeFitMode={setFitMode}
-          autoTrim={autoTrim}
-          onChangeAutoTrim={setAutoTrim}
-          canvasBg={canvasBg}
-          onChangeCanvasBg={setCanvasBg}
-        />
+        {/* Left Control Panel (Drawer / Tab on Mobile, Sidebar on Desktop) */}
+        <div
+          className={`h-full ${
+            mobileTab === 'controls'
+              ? 'flex flex-col flex-1 w-full'
+              : 'hidden lg:flex lg:w-84 xl:w-92 shrink-0'
+          }`}
+        >
+          <ControlPanel
+            config={config}
+            onChangeConfig={handleUpdateConfig}
+            onUploadImage={handleUploadImage}
+            onRunMediaPipeScan={handleRunMediaPipeScan}
+            isScanning={isScanning}
+            scanNotification={scanNotification}
+            onDismissNotification={() => setScanNotification(null)}
+            sensorStatus={sensorStatus}
+            boxes={boxes}
+            onUpdateBoxes={setBoxes}
+            keypoints={keypoints}
+            onUpdateKeypoints={setKeypoints}
+            theme={theme}
+            hasImage={Boolean(imageSrc)}
+            aspectRatio={aspectRatio}
+            onChangeAspectRatio={setAspectRatio}
+            fitMode={fitMode}
+            onChangeFitMode={setFitMode}
+            autoTrim={autoTrim}
+            onChangeAutoTrim={setAutoTrim}
+            canvasBg={canvasBg}
+            onChangeCanvasBg={setCanvasBg}
+            onSwitchTab={() => setMobileTab('canvas')}
+          />
+        </div>
 
         {/* Center Interactive Canvas Viewport */}
-        <CanvasViewer
-          imageSrc={imageSrc}
-          processedImage={processedCanvas}
-          config={config}
-          boxes={boxes}
-          keypoints={keypoints}
-          onAddKeypoint={handleAddKeypoint}
-          onUploadImage={handleUploadImage}
-          canvasRef={canvasRef}
-          theme={theme}
-          aspectRatio={aspectRatio}
-          onChangeAspectRatio={setAspectRatio}
-          fitMode={fitMode}
-          onChangeFitMode={setFitMode}
-          autoTrim={autoTrim}
-          onChangeAutoTrim={setAutoTrim}
-        />
+        <div
+          className={`h-full ${
+            mobileTab === 'canvas'
+              ? 'flex flex-col flex-1 w-full'
+              : 'hidden lg:flex flex-1'
+          }`}
+        >
+          <CanvasViewer
+            imageSrc={imageSrc}
+            processedImage={processedCanvas}
+            config={config}
+            boxes={boxes}
+            keypoints={keypoints}
+            onAddKeypoint={handleAddKeypoint}
+            onUploadImage={handleUploadImage}
+            canvasRef={canvasRef}
+            theme={theme}
+            aspectRatio={aspectRatio}
+            onChangeAspectRatio={setAspectRatio}
+            fitMode={fitMode}
+            onChangeFitMode={setFitMode}
+            autoTrim={autoTrim}
+            onChangeAutoTrim={setAutoTrim}
+            onSwitchTab={() => setMobileTab('controls')}
+          />
+        </div>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (Visible only on < lg) */}
+      <nav
+        aria-label="Mobile Navigation"
+        className={`lg:hidden h-14 border-t px-2 shrink-0 grid grid-cols-4 items-center z-40 select-none transition-colors duration-150 ${
+          theme === 'dark'
+            ? 'bg-[#0a0e17] border-slate-800 text-slate-400'
+            : 'bg-white border-slate-300 text-slate-600 shadow-lg'
+        }`}
+      >
+        {/* Tab 1: Kanvas */}
+        <button
+          onClick={() => setMobileTab('canvas')}
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors cursor-pointer ${
+            mobileTab === 'canvas'
+              ? theme === 'dark' ? 'text-cyan-400 font-bold' : 'text-cyan-700 font-bold'
+              : 'hover:text-current'
+          }`}
+        >
+          <Camera className="w-5 h-5" />
+          <span className="text-[10px] uppercase font-mono tracking-wider">Kanvas</span>
+        </button>
+
+        {/* Tab 2: Kontrol */}
+        <button
+          onClick={() => setMobileTab('controls')}
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 relative transition-colors cursor-pointer ${
+            mobileTab === 'controls'
+              ? theme === 'dark' ? 'text-cyan-400 font-bold' : 'text-cyan-700 font-bold'
+              : 'hover:text-current'
+          }`}
+        >
+          <Sliders className="w-5 h-5" />
+          <span className="text-[10px] uppercase font-mono tracking-wider">Kontrol</span>
+          {isScanning && (
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping absolute top-2 right-1/4" />
+          )}
+        </button>
+
+        {/* Tab 3: Presets */}
+        <button
+          onClick={() => setIsPresetsOpen(true)}
+          className="min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors hover:text-current cursor-pointer text-amber-500"
+        >
+          <Palette className="w-5 h-5" />
+          <span className="text-[10px] uppercase font-mono tracking-wider">Presets</span>
+        </button>
+
+        {/* Tab 4: Export */}
+        <button
+          onClick={handleExportImage}
+          disabled={!imageSrc}
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+            imageSrc
+              ? theme === 'dark' ? 'text-emerald-400 font-bold' : 'text-emerald-600 font-bold'
+              : 'opacity-40'
+          }`}
+        >
+          <Download className="w-5 h-5" />
+          <span className="text-[10px] uppercase font-mono tracking-wider">Export</span>
+        </button>
+      </nav>
 
       {/* Style Presets Modal */}
       <PresetsModal

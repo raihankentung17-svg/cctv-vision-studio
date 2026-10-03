@@ -12,7 +12,8 @@ import {
   Upload,
   Camera,
   Crop,
-  Scaling
+  Scaling,
+  Sliders
 } from 'lucide-react';
 import { renderCCTVVisionEffect } from '../utils/glitchEngine';
 import { ASPECT_RATIOS } from '../utils/imageProcessor';
@@ -32,7 +33,8 @@ export default function CanvasViewer({
   fitMode = 'contain',
   onChangeFitMode,
   autoTrim = false,
-  onChangeAutoTrim
+  onChangeAutoTrim,
+  onSwitchTab
 }) {
   const containerRef = useRef(null);
   const viewportRef = useRef(null);
@@ -78,8 +80,9 @@ export default function CanvasViewer({
   // Helper to calculate optimal fit scale for the current viewport dimensions
   const calculateFitScale = (w, h) => {
     if (!viewportRef.current || !w || !h) return 1.0;
-    const vpW = Math.max(100, viewportRef.current.clientWidth - 64);
-    const vpH = Math.max(100, viewportRef.current.clientHeight - 64);
+    const padding = typeof window !== 'undefined' && window.innerWidth < 640 ? 16 : 64;
+    const vpW = Math.max(100, viewportRef.current.clientWidth - padding);
+    const vpH = Math.max(100, viewportRef.current.clientHeight - padding);
     const scaleW = vpW / w;
     const scaleH = vpH / h;
     const fit = Math.min(1.0, Math.max(0.15, Math.min(scaleW, scaleH)));
@@ -280,6 +283,48 @@ export default function CanvasViewer({
     setIsDragging(false);
   };
 
+  // Mobile Touch Gestures (1-finger pan & 2-finger pinch-zoom)
+  const touchStateRef = useRef({ dist: 0, initialScale: 1.0 });
+
+  const handleTouchStart = (e) => {
+    if (!imageSrc) return;
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStateRef.current = { dist, initialScale: scale };
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!imageSrc) return;
+    if (e.touches.length === 1 && isDragging) {
+      const touch = e.touches[0];
+      setPan({
+        x: touch.clientX - dragStart.x,
+        y: touch.clientY - dragStart.y
+      });
+    } else if (e.touches.length === 2 && touchStateRef.current.dist > 0) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = currentDist / touchStateRef.current.dist;
+      const newScale = Math.min(4.5, Math.max(0.15, touchStateRef.current.initialScale * factor));
+      setScale(Number(newScale.toFixed(4)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    touchStateRef.current = { dist: 0, initialScale: scale };
+  };
+
   // 7. Click to Add Red Tracking Cross
   const handleCanvasClick = (e) => {
     if (!imageSrc) return;
@@ -358,7 +403,7 @@ export default function CanvasViewer({
       {/* Dedicated Top Cyber Controls Bar (Non-occluding, leaves canvas 100% visible) */}
       {imageSrc && (
         <header
-          className={`h-14 px-3 border-b shrink-0 flex items-center justify-between z-20 overflow-x-auto text-xs transition-colors select-none ${
+          className={`h-12 sm:h-14 px-2 sm:px-3 border-b shrink-0 flex items-center justify-between z-20 overflow-x-auto text-xs transition-colors select-none scrollbar-none [&::-webkit-scrollbar]:hidden ${
             isDark
               ? 'bg-[#0a0e17] border-slate-800 text-slate-200 shadow-sm'
               : 'bg-white border-slate-300 text-slate-800 shadow-xs'
@@ -576,10 +621,13 @@ export default function CanvasViewer({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`flex-1 w-full h-full flex items-center justify-center p-8 overflow-hidden relative ${
+        className={`flex-1 w-full h-full flex items-center justify-center p-2 sm:p-4 lg:p-8 overflow-hidden relative touch-none select-none ${
           imageSrc
             ? isPanActive
               ? isDragging
@@ -592,7 +640,7 @@ export default function CanvasViewer({
         {/* Empty Standby Dropzone State (Clean, no pulsing slop) */}
         {!imageSrc ? (
           <div
-            className={`max-w-md w-full p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all ${
+            className={`max-w-md w-full p-5 sm:p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all ${
               isDragOver
                 ? 'border-cyan-500 bg-cyan-500/10 scale-102'
                 : isDark
@@ -694,30 +742,42 @@ export default function CanvasViewer({
         )}
       </div>
 
+      {/* Floating Action Button for Mobile Quick Access to Controls */}
+      {imageSrc && onSwitchTab && (
+        <div className="lg:hidden absolute bottom-10 right-3 z-30 pointer-events-auto">
+          <button
+            onClick={() => onSwitchTab('controls')}
+            className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-tech font-bold text-xs shadow-xl shadow-cyan-500/25 active:scale-95 transition-all cursor-pointer"
+          >
+            <Sliders className="w-4 h-4 stroke-[2.5]" />
+            <span>Atur Efek</span>
+          </button>
+        </div>
+      )}
+
       {/* Bottom Telemetry Bar (WCAG AA Compliant Contrast) */}
       <footer
-        className={`h-8 border-t px-4 flex items-center justify-between text-[11px] font-tech transition-colors duration-150 ${
+        className={`h-7 sm:h-8 border-t px-2.5 sm:px-4 flex items-center justify-between text-[10px] sm:text-[11px] font-tech transition-colors duration-150 shrink-0 ${
           isDark
             ? 'border-slate-800 bg-[#090c13] text-slate-300'
             : 'border-slate-300 bg-white text-slate-700 font-medium'
         }`}
       >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <span className="font-bold">RESOLUTION:</span>
+        <div className="flex items-center gap-2 sm:gap-3 truncate">
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="font-bold">RES:</span>
             <span className={`font-mono ${isDark ? 'text-slate-100 font-semibold' : 'text-slate-900 font-bold'}`}>
-              {imageDims.width > 0 ? `${imageDims.width} × ${imageDims.height}` : 'STANDBY'}
+              {imageDims.width > 0 ? `${imageDims.width}×${imageDims.height}` : 'STANDBY'}
             </span>
           </div>
 
-          <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span>
-
           {cursorInfo.visible && (
-            <div className={`flex items-center gap-2 font-mono font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-800'}`}>
-              <span>
-                X: {cursorInfo.x} Y: {cursorInfo.y}
-              </span>
-            </div>
+            <>
+              <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span>
+              <div className={`hidden xs:flex items-center gap-1 font-mono font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-800'}`}>
+                <span>X:{cursorInfo.x} Y:{cursorInfo.y}</span>
+              </div>
+            </>
           )}
 
           <span className={`${isDark ? 'text-slate-600' : 'text-slate-400'} hidden md:inline`}>|</span>
@@ -730,19 +790,19 @@ export default function CanvasViewer({
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div>
             ZOOM: <span className={`font-mono font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-800'}`}>{Math.round(scale * 100)}%</span>
           </div>
-          <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span>
-          <div>
+          <span className={`${isDark ? 'text-slate-600' : 'text-slate-400'} hidden sm:inline`}>|</span>
+          <div className="hidden sm:inline">
             RENDER: <span className={`font-mono font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>{renderTime}ms</span>
           </div>
           <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span>
           <div>
             FEED:{' '}
             <span className={`uppercase font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-800'}`}>
-              {imageSrc ? (isHoldingOriginal ? 'RAW BUFFER' : 'CCTV ACTIVE') : 'STANDBY'}
+              {imageSrc ? (isHoldingOriginal ? 'RAW' : 'CCTV') : 'STANDBY'}
             </span>
           </div>
         </div>
