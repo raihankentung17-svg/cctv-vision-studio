@@ -100,7 +100,7 @@ export default function Navbar({
         <button
           onClick={onToggleTheme}
           aria-label={isDark ? 'Ganti ke Tema Terang' : 'Ganti ke Tema Gelap'}
-          className={`w-10 h-10 sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
             isDark
               ? 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-amber-400'
               : 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-800'
@@ -110,25 +110,25 @@ export default function Navbar({
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
-        {/* Presets Button */}
+        {/* Presets Button (Hidden on mobile < sm, because permanently available in Mobile Bottom Bar) */}
         <button
           onClick={onOpenPresets}
-          className={`min-h-[40px] sm:min-h-[44px] flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`hidden sm:inline-flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer shrink-0 ${
             isDark
               ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200 hover:border-slate-500'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-900'
           }`}
           title="Pilih Style Preset"
         >
-          <Sliders className="w-3.5 h-3.5 text-cyan-600" />
-          <span className="hidden sm:inline">Presets</span>
+          <Sliders className="w-3.5 h-3.5 text-cyan-500" />
+          <span>Presets</span>
         </button>
 
         {/* Clear Canvas Button */}
         {hasImage && (
           <button
             onClick={onClearCanvas}
-            className={`min-h-[40px] sm:min-h-[44px] flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer shrink-0 ${
+            className={`h-9 sm:min-h-[40px] flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shrink-0 ${
               isDark
                 ? 'bg-red-950/40 border-red-900/60 hover:bg-red-950/70 text-red-300'
                 : 'bg-red-50 border-red-200 hover:bg-red-100 text-red-700'
@@ -144,7 +144,7 @@ export default function Navbar({
         <button
           onClick={onExportImage}
           disabled={!hasImage}
-          className="min-h-[40px] sm:min-h-[44px] flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
+          className="h-9 sm:min-h-[40px] flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
           title="Download gambar resolusi penuh (PNG)"
         >
           <Download className="w-4 h-4 stroke-[2.5]" />

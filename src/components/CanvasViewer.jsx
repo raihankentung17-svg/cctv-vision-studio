@@ -401,215 +401,233 @@ export default function CanvasViewer({
       }`}
     >
       {/* Dedicated Top Cyber Controls Bar (Non-occluding, leaves canvas 100% visible) */}
+      {/* Dedicated Cyber Studio Controls Bar (Clean, non-occluding, responsive pro studio layout) */}
       {imageSrc && (
         <header
-          className={`h-12 sm:h-14 px-2 sm:px-3 border-b shrink-0 flex items-center justify-between z-20 overflow-x-auto text-xs transition-colors select-none scrollbar-none [&::-webkit-scrollbar]:hidden ${
+          className={`h-12 sm:h-13 px-2 sm:px-3 border-b shrink-0 flex items-center justify-between z-20 gap-1.5 sm:gap-3 overflow-x-auto text-xs transition-colors select-none scrollbar-none [&::-webkit-scrollbar]:hidden ${
             isDark
-              ? 'bg-[#0a0e17] border-slate-800 text-slate-200 shadow-sm'
-              : 'bg-white border-slate-300 text-slate-800 shadow-xs'
+              ? 'bg-[#090d15]/95 border-slate-800 text-slate-200 shadow-sm'
+              : 'bg-white/95 border-slate-300 text-slate-800 shadow-xs'
           }`}
         >
-          {/* Left Action Tools */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setActiveTool('crosshair')}
-              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                activeTool === 'crosshair' && !isSpacePressed
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
-                  : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+          {/* Left / Primary Tool Groups: Interaction & Framing */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Group 1: Interactive Toolset (Crosshair, Pan, Compare) */}
+            <div
+              className={`flex items-center p-0.5 rounded-lg border ${
+                isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-100 border-slate-200'
               }`}
-              title="Crosshair Tool: Klik canvas untuk menambahkan Red Tracking Cross (+)"
             >
-              <Crosshair className="w-4 h-4" />
-              <span className="hidden sm:inline">Crosshair</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTool('pan')}
-              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                activeTool === 'pan' || isSpacePressed
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
-                  : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
-              }`}
-              title="Hand Tool: Geser canvas (Tahan Spacebar)"
-            >
-              <Hand className="w-4 h-4" />
-              <span className="hidden sm:inline">Pan</span>
-            </button>
-
-            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
-
-            <button
-              onMouseDown={() => setIsHoldingOriginal(true)}
-              onMouseUp={() => setIsHoldingOriginal(false)}
-              onMouseLeave={() => setIsHoldingOriginal(false)}
-              onTouchStart={() => setIsHoldingOriginal(true)}
-              onTouchEnd={() => setIsHoldingOriginal(false)}
-              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                isHoldingOriginal
-                  ? 'bg-amber-400 text-slate-950 font-bold'
-                  : isDark ? 'hover:bg-slate-800 text-amber-300' : 'hover:bg-slate-100 text-amber-800'
-              }`}
-              title="Tahan klik untuk melihat gambar asli tanpa efek"
-            >
-              <Eye className="w-4 h-4" />
-              <span className="hidden sm:inline">Compare</span>
-            </button>
-
-            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
-
-            {/* Quick Aspect Ratio Selector */}
-            <div className="flex items-center gap-1">
-              <span className={`text-[10px] font-bold uppercase hidden md:inline px-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Format:
-              </span>
-              <select
-                value={aspectRatio}
-                onChange={(e) => onChangeAspectRatio && onChangeAspectRatio(e.target.value)}
-                className={`min-h-[38px] px-2 py-1 rounded text-xs font-mono font-bold border transition-colors cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-900 border-slate-700 text-cyan-400 hover:border-cyan-500'
-                    : 'bg-slate-50 border-slate-300 text-cyan-800 hover:border-cyan-500'
+              <button
+                onClick={() => setActiveTool('crosshair')}
+                className={`h-8 sm:h-8.5 px-2 sm:px-2.5 flex items-center gap-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                  activeTool === 'crosshair' && !isSpacePressed
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                    : isDark ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-700'
                 }`}
-                title="Pilih Format / Aspek Rasio Kanvas"
+                title="Crosshair Tool: Klik kanvas untuk menambahkan target tracking (+)"
               >
-                {ASPECT_RATIOS.map((r) => (
-                  <option key={r.id} value={r.id} className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
-                    {r.name} ({r.label})
-                  </option>
-                ))}
-              </select>
+                <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden sm:inline text-xs">Crosshair</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTool('pan')}
+                className={`h-8 sm:h-8.5 px-2 sm:px-2.5 flex items-center gap-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                  activeTool === 'pan' || isSpacePressed
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                    : isDark ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-700'
+                }`}
+                title="Hand Tool: Geser kanvas (atau tahan Spacebar)"
+              >
+                <Hand className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden sm:inline text-xs">Pan</span>
+              </button>
+
+              <div className={`w-px h-4 mx-0.5 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+
+              <button
+                onMouseDown={() => setIsHoldingOriginal(true)}
+                onMouseUp={() => setIsHoldingOriginal(false)}
+                onMouseLeave={() => setIsHoldingOriginal(false)}
+                onTouchStart={() => setIsHoldingOriginal(true)}
+                onTouchEnd={() => setIsHoldingOriginal(false)}
+                className={`h-8 sm:h-8.5 px-2 sm:px-2.5 flex items-center gap-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                  isHoldingOriginal
+                    ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                    : isDark ? 'hover:bg-slate-800 text-amber-300 hover:text-amber-200' : 'hover:bg-slate-200 text-amber-800'
+                }`}
+                title="Tahan klik/sentuh untuk melihat foto asli RAW tanpa efek"
+              >
+                <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden sm:inline text-xs">Compare</span>
+              </button>
             </div>
 
-            {/* Framing Mode (Smart Fit vs Contain vs Cover) */}
-            {aspectRatio !== 'original' && aspectRatio !== 'smart_focus' && (
-              <div className="flex items-center gap-1">
+            {/* Group 2: Canvas Framing & Ratio Control */}
+            <div
+              className={`flex items-center gap-1 p-0.5 rounded-lg border ${
+                isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-100 border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-1 px-1">
+                <Scaling className={`w-3.5 h-3.5 hidden md:inline shrink-0 ${isDark ? 'text-slate-400' : 'text-slate-500'}`} />
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => onChangeAspectRatio && onChangeAspectRatio(e.target.value)}
+                  className={`h-8 sm:h-8.5 px-1.5 sm:px-2 rounded text-[11px] sm:text-xs font-mono font-bold border transition-colors cursor-pointer max-w-[85px] xs:max-w-[105px] sm:max-w-none ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-700/80 text-cyan-400 hover:border-cyan-500 focus:border-cyan-400'
+                      : 'bg-white border-slate-300 text-cyan-900 hover:border-cyan-600 focus:border-cyan-600'
+                  }`}
+                  title="Pilih Rasio Aspek Kanvas"
+                >
+                  <option value="original">Original</option>
+                  <option value="4:5">4:5 (IG)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                  <option value="9:16">9:16 (Story)</option>
+                  <option value="16:9">16:9 (Monitor)</option>
+                  <option value="3:4">3:4 (CCTV)</option>
+                  <option value="smart_focus">Smart Focus</option>
+                </select>
+              </div>
+
+              {/* Framing Mode Dropdown (only when non-native ratio is active) */}
+              {aspectRatio !== 'original' && aspectRatio !== 'smart_focus' && (
                 <select
                   value={fitMode}
                   onChange={(e) => onChangeFitMode && onChangeFitMode(e.target.value)}
-                  className={`min-h-[38px] px-2 py-1 rounded text-xs font-bold border transition-colors cursor-pointer ${
+                  className={`h-8 sm:h-8.5 px-1.5 sm:px-2 rounded text-[11px] sm:text-xs font-bold border transition-colors cursor-pointer max-w-[76px] xs:max-w-[90px] sm:max-w-none ${
                     isDark
-                      ? 'bg-slate-900 border-slate-700 text-amber-400 hover:border-amber-500'
-                      : 'bg-slate-50 border-slate-300 text-amber-800 hover:border-amber-500'
+                      ? 'bg-slate-900 border-slate-700/80 text-amber-400 hover:border-amber-500 focus:border-amber-400'
+                      : 'bg-white border-slate-300 text-amber-900 hover:border-amber-600 focus:border-amber-600'
                   }`}
-                  title="Pilih Mode Penataan Kanvas"
+                  title="Mode Penataan Gambar (Fit Mode)"
                 >
-                  <option value="smart_fit" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
-                    Smart Fit (Fokus Subjek)
-                  </option>
-                  <option value="contain" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
-                    Contain (Utuh + Padding)
-                  </option>
-                  <option value="cover" className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
-                    Cover (Penuhi Frame)
-                  </option>
+                  <option value="smart_fit">Smart Fit</option>
+                  <option value="contain">Contain</option>
+                  <option value="cover">Cover</option>
                 </select>
-              </div>
-            )}
+              )}
 
-            {/* Quick Auto-Trim Whitespace Button */}
-            <button
-              onClick={() => onChangeAutoTrim && onChangeAutoTrim(!autoTrim)}
-              className={`min-h-[38px] flex items-center gap-1 px-2.5 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                autoTrim
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
-                  : isDark
-                  ? 'hover:bg-slate-800 text-slate-300 border border-slate-700'
-                  : 'hover:bg-slate-100 text-slate-700 border border-slate-300'
-              }`}
-              title="Auto-Trim Whitespace: Pangkas margin putih kosong di sekitar subjek"
-            >
-              <Crop className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline text-xs">{autoTrim ? 'Trim Aktif' : 'Trim Void'}</span>
-            </button>
+              {/* Auto-Trim Margin Toggle */}
+              <button
+                onClick={() => onChangeAutoTrim && onChangeAutoTrim(!autoTrim)}
+                className={`h-8 sm:h-8.5 px-2 flex items-center gap-1 rounded-md font-semibold transition-all cursor-pointer ${
+                  autoTrim
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                    : isDark
+                    ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : 'hover:bg-slate-200 text-slate-700'
+                }`}
+                title="Auto-Trim Whitespace: Pangkas margin putih kosong"
+              >
+                <Crop className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden lg:inline text-xs">{autoTrim ? 'Trim ON' : 'Trim'}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Right Zoom & Viewport Controls */}
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={zoomIn}
-              aria-label="Zoom In"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+          {/* Right Tool Groups: Viewport Zoom & HUD Overlays */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Group 3: Viewport Zoom & Scaling */}
+            <div
+              className={`flex items-center p-0.5 rounded-lg border ${
+                isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-100 border-slate-200'
               }`}
-              title="Zoom In (Scroll Up)"
             >
-              <ZoomIn className="w-4 h-4" />
-            </button>
+              <button
+                onClick={zoomOut}
+                aria-label="Zoom Out"
+                className={`w-8 h-8 sm:w-8.5 sm:h-8.5 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200 hover:text-white' : 'hover:bg-slate-200 text-slate-800'
+                }`}
+                title="Zoom Out (Scroll Down)"
+              >
+                <ZoomOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
 
-            <button
-              onClick={zoomOut}
-              aria-label="Zoom Out"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+              <button
+                onClick={handleActualSize}
+                className={`h-8 sm:h-8.5 px-1.5 sm:px-2 flex items-center justify-center rounded-md transition-colors cursor-pointer text-[11px] sm:text-xs font-mono font-bold ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200 hover:text-white' : 'hover:bg-slate-200 text-slate-900'
+                }`}
+                title="Klik untuk 100% Native Resolusi"
+              >
+                {Math.round(scale * 100)}%
+              </button>
+
+              <button
+                onClick={zoomIn}
+                aria-label="Zoom In"
+                className={`w-8 h-8 sm:w-8.5 sm:h-8.5 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200 hover:text-white' : 'hover:bg-slate-200 text-slate-800'
+                }`}
+                title="Zoom In (Scroll Up)"
+              >
+                <ZoomIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+
+              <div className={`w-px h-4 mx-0.5 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+
+              <button
+                onClick={handleFitToScreen}
+                aria-label="Fit to Screen"
+                className={`w-8 h-8 sm:w-8.5 sm:h-8.5 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200 hover:text-white' : 'hover:bg-slate-200 text-slate-800'
+                }`}
+                title="Fit to Screen: Sesuaikan ukuran kanvas dengan layar"
+              >
+                <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+
+              <button
+                onClick={() => {
+                  setPan({ x: 0, y: 0 });
+                  setScale(1.0);
+                }}
+                aria-label="Reset Zoom & Pan"
+                className={`hidden xs:flex w-8 h-8 sm:w-8.5 sm:h-8.5 items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200 hover:text-white' : 'hover:bg-slate-200 text-slate-800'
+                }`}
+                title="Reset Posisi & Zoom"
+              >
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
+
+            {/* Group 4: HUD & Monitor Overlays */}
+            <div
+              className={`flex items-center p-0.5 rounded-lg border ${
+                isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-100 border-slate-200'
               }`}
-              title="Zoom Out (Scroll Down)"
             >
-              <ZoomOut className="w-4 h-4" />
-            </button>
+              <button
+                onClick={() => setShowHUDGrid(!showHUDGrid)}
+                aria-label="Toggle Coordinate Grid"
+                className={`w-8 h-8 sm:w-8.5 sm:h-8.5 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  showHUDGrid
+                    ? 'bg-cyan-500/25 text-cyan-400 font-bold border border-cyan-500/40'
+                    : isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-200 text-slate-600'
+                }`}
+                title="Toggle CCTV HUD Coordinate Grid"
+              >
+                <Grid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
 
-            <button
-              onClick={handleActualSize}
-              className={`h-9 px-2 flex items-center justify-center rounded-md transition-colors cursor-pointer text-xs font-mono font-bold ${
-                isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-900'
-              }`}
-              title="100% Native Resolution"
-            >
-              {Math.round(scale * 100)}%
-            </button>
-
-            <button
-              onClick={handleFitToScreen}
-              aria-label="Fit to Screen"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-              }`}
-              title="Fit to Screen: Sesuaikan ukuran kanvas dengan layar"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                setPan({ x: 0, y: 0 });
-                setScale(1.0);
-              }}
-              aria-label="Reset Zoom & Pan"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-              }`}
-              title="Reset Zoom & Pan"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-
-            <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
-
-            <button
-              onClick={() => setShowHUDGrid(!showHUDGrid)}
-              aria-label="Toggle Coordinate Grid"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                showHUDGrid
-                  ? 'bg-cyan-500/20 text-cyan-500 font-bold'
-                  : isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-              }`}
-              title="Toggle CCTV HUD Coordinate Grid"
-            >
-              <Grid className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => setShowScanlines(!showScanlines)}
-              aria-label="Toggle Retro CRT Scanlines"
-              className={`w-9 h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-                showScanlines
-                  ? 'bg-cyan-500/20 text-cyan-500 font-bold'
-                  : isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-              }`}
-              title="Toggle CRT Scanline Retro Monitor Effect"
-            >
-              <Monitor className="w-4 h-4" />
-            </button>
+              <button
+                onClick={() => setShowScanlines(!showScanlines)}
+                aria-label="Toggle Retro CRT Scanlines"
+                className={`w-8 h-8 sm:w-8.5 sm:h-8.5 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+                  showScanlines
+                    ? 'bg-cyan-500/25 text-cyan-400 font-bold border border-cyan-500/40'
+                    : isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-200 text-slate-600'
+                }`}
+                title="Toggle CRT Scanline Retro Monitor Effect"
+              >
+                <Monitor className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
           </div>
         </header>
       )}
@@ -741,19 +759,6 @@ export default function CanvasViewer({
           </div>
         )}
       </div>
-
-      {/* Floating Action Button for Mobile Quick Access to Controls */}
-      {imageSrc && onSwitchTab && (
-        <div className="lg:hidden absolute bottom-10 right-3 z-30 pointer-events-auto">
-          <button
-            onClick={() => onSwitchTab('controls')}
-            className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-tech font-bold text-xs shadow-xl shadow-cyan-500/25 active:scale-95 transition-all cursor-pointer"
-          >
-            <Sliders className="w-4 h-4 stroke-[2.5]" />
-            <span>Atur Efek</span>
-          </button>
-        </div>
-      )}
 
       {/* Bottom Telemetry Bar (WCAG AA Compliant Contrast) */}
       <footer

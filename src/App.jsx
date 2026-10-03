@@ -378,21 +378,24 @@ export default function App() {
       {/* Mobile Bottom Navigation Bar (Visible only on < lg) */}
       <nav
         aria-label="Mobile Navigation"
-        className={`lg:hidden h-14 border-t px-2 shrink-0 grid grid-cols-4 items-center z-40 select-none transition-colors duration-150 ${
+        className={`lg:hidden h-14 pb-[env(safe-area-inset-bottom)] border-t px-2 shrink-0 grid grid-cols-4 items-center z-40 select-none transition-colors duration-150 ${
           theme === 'dark'
-            ? 'bg-[#0a0e17] border-slate-800 text-slate-400'
-            : 'bg-white border-slate-300 text-slate-600 shadow-lg'
+            ? 'bg-[#080c14]/95 backdrop-blur-md border-slate-800 text-slate-400'
+            : 'bg-white/95 backdrop-blur-md border-slate-300 text-slate-600 shadow-lg'
         }`}
       >
         {/* Tab 1: Kanvas */}
         <button
           onClick={() => setMobileTab('canvas')}
-          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors cursor-pointer ${
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-all cursor-pointer active:scale-95 relative ${
             mobileTab === 'canvas'
               ? theme === 'dark' ? 'text-cyan-400 font-bold' : 'text-cyan-700 font-bold'
               : 'hover:text-current'
           }`}
         >
+          {mobileTab === 'canvas' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-cyan-400 rounded-full" />
+          )}
           <Camera className="w-5 h-5" />
           <span className="text-[10px] uppercase font-mono tracking-wider">Kanvas</span>
         </button>
@@ -400,12 +403,15 @@ export default function App() {
         {/* Tab 2: Kontrol */}
         <button
           onClick={() => setMobileTab('controls')}
-          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 relative transition-colors cursor-pointer ${
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 relative transition-all cursor-pointer active:scale-95 ${
             mobileTab === 'controls'
               ? theme === 'dark' ? 'text-cyan-400 font-bold' : 'text-cyan-700 font-bold'
               : 'hover:text-current'
           }`}
         >
+          {mobileTab === 'controls' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-cyan-400 rounded-full" />
+          )}
           <Sliders className="w-5 h-5" />
           <span className="text-[10px] uppercase font-mono tracking-wider">Kontrol</span>
           {isScanning && (
@@ -416,7 +422,7 @@ export default function App() {
         {/* Tab 3: Presets */}
         <button
           onClick={() => setIsPresetsOpen(true)}
-          className="min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors hover:text-current cursor-pointer text-amber-500"
+          className="min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-all hover:text-current cursor-pointer text-amber-500 active:scale-95"
         >
           <Palette className="w-5 h-5" />
           <span className="text-[10px] uppercase font-mono tracking-wider">Presets</span>
@@ -426,7 +432,7 @@ export default function App() {
         <button
           onClick={handleExportImage}
           disabled={!imageSrc}
-          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+          className={`min-h-[44px] flex flex-col items-center justify-center py-1 gap-1 transition-all cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
             imageSrc
               ? theme === 'dark' ? 'text-emerald-400 font-bold' : 'text-emerald-600 font-bold'
               : 'opacity-40'
